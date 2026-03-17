@@ -20,6 +20,7 @@ import secrets
 
 import sqlitedb
 import htmljsdb
+from urllib.parse import urlparse, parse_qs
 
 def getTime():
     return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S ')
@@ -348,16 +349,80 @@ class LogHandler():
         if 0 < res_size <= LogHandler.small_file_size or res_filetype == 'unknown':
             res_uid = secrets.token_urlsafe(16)
             self.dump_db.insert(res_uid, res_content, commit=False)
+
+        # THESIS METHODOLOGY: ETR METRIC EXTRACTION
+        
+        # --- SILO 1: RTB Economics (Prebid.js & OpenRTB Parsing) ---
+        cpm_values =[]
+        is_rtb_auction = False
+        
+        # Check if the response is JSON and might contain bid data
+        if b'cpm' in res_content.lower() or b'seatbid' in res_content.lower() or b'price' in res_content.lower():
+            try:
+                # Decode and parse the JSON
+                json_data = json.loads(res_content.decode('utf-8', 'ignore'))
+                
+                # Check for standard OpenRTB 'seatbid' arrays
+                if 'seatbid' in json_data:
+                    is_rtb_auction = True
+                    for seat in json_data['seatbid']:
+                        for bid in seat.get('bid',[]):
+                            if 'price' in bid: cpm_values.append(bid['price'])
+                            elif 'cpm' in bid: cpm_values.append(bid['cpm'])
+                
+                # Check for Prebid.js specific response formats
+                elif 'bids' in json_data:
+                    is_rtb_auction = True
+                    for bid in json_data['bids']:
+                        if 'cpm' in bid: cpm_values.append(bid['cpm'])
+            except:
+                pass # Not a valid JSON or parsing failed
+
+        # --- SILO 2: Network Identifiers (UID Smuggling & CSync) ---
+        is_csync = False
+        smuggled_uids = {}
+        
+        # 2A. Detect Cookie Synchronization (CSync) via 3xx Redirects
+        if flow.response.status_code in[301, 302, 303, 307, 308]:
+            location = flow.response.headers.get("Location", "")
+            if 'sync' in flow.request.url.lower() or 'sync' in location.lower():
+                is_csync = True
+                
+        # 2B. Detect UID Smuggling in the URL Query Parameters
+        parsed_url = urlparse(flow.request.url)
+        query_params = parse_qs(parsed_url.query)
+        
+        for key, values in query_params.items():
+            key_lower = key.lower()
+            # Look for common tracking ID parameters
+            if any(id_trigger in key_lower for id_trigger in['uid', 'id', 'uuid', 'pid', 'click']):
+                for val in values:
+                    # If the parameter value is long (high entropy), it's a tracking ID, not a generic page id (like id=1)
+                    if len(val) > 10: 
+                        smuggled_uids[key] = val
+
+        # =========================================================
+        # Save ETR Data to the standard OmniCrawl Log Bucket
+        # =========================================================
         self.log_bucket['requests'].append({
             'timestamp': flow.request.timestamp_end,
             'scheme': flow.request.scheme,
             'host': flow.request.host,
-            'url': flow.request.url, # query is included
+            'url': flow.request.url,
             'method': flow.request.method,
             'uid': req_uid,
             'size': req_size,
             'filetype': self._determineFileType(req_content),
             'headers': dict(flow.request.headers),
+            
+            # ---> THESIS: ETR METRICS APPENDED HERE <---
+            'etr_metrics': {
+                'is_rtb': is_rtb_auction,
+                'cpm_values': cpm_values,
+                'is_csync': is_csync,
+                'smuggled_uids': smuggled_uids
+            },
+            
             'response': {
                 'status_code': flow.response.status_code,
                 'headers': dict(flow.response.headers),
@@ -367,6 +432,26 @@ class LogHandler():
                 'size': res_size,
             }
         })
+        #
+        #self.log_bucket['requests'].append({
+        #    'timestamp': flow.request.timestamp_end,
+        #    'scheme': flow.request.scheme,
+        #    'host': flow.request.host,
+        #    'url': flow.request.url, # query is included
+        #    'method': flow.request.method,
+        #    'uid': req_uid,
+        #    'size': req_size,
+        #    'filetype': self._determineFileType(req_content),
+        #    'headers': dict(flow.request.headers),
+        #    'response': {
+        #        'status_code': flow.response.status_code,
+        #        'headers': dict(flow.response.headers),
+        #        'timestamp': flow.response.timestamp_end,
+        #        'uid': res_uid,
+        #        'filetype': res_filetype,
+        #        'size': res_size,
+        #    }
+        #})
 
 
     def _resetLogBucket(self):
