@@ -4,7 +4,7 @@ import os
 from playwright.sync_api import sync_playwright
 
 # Usage: python launch_native_firefox.py <path_to_binary> <profile_dir> <url> <enable_rfp>
-binary_path = sys.argv[1]
+binary_path = "/usr/bin/firefox"  # Default path to Firefox binary
 profile_path = sys.argv[2]
 url = sys.argv[3]
 enable_rfp = sys.argv[4].lower() == 'true'
