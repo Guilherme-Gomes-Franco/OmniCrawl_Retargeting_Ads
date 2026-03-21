@@ -5,6 +5,7 @@ import threading
 from playwright.sync_api import sync_playwright
 import argparse
 import sys
+import os
 
 # ==========================================================
 # 1. THE TCP SYNC SERVER (To handshake with mitmproxy)
@@ -51,6 +52,7 @@ def create_browser_context(p, browser_type, binary_path):
             user_data_dir="", # Ephemeral dir for strict state control
             executable_path=binary_path,
             headless=False,
+            proxy={"server": "http://127.0.0.1:38080"},
             ignore_default_args=["--enable-automation"],
             args=["--disable-blink-features=AutomationControlled", "--ignore-certificate-errors"]
         )
@@ -59,24 +61,27 @@ def create_browser_context(p, browser_type, binary_path):
             user_data_dir="",
             executable_path=binary_path,
             headless=False,
+            proxy={"server": "http://127.0.0.1:38080"},
             ignore_default_args=["--enable-automation"]
         )
     elif browser_type == "webkit":
         context = p.webkit.launch_persistent_context(
             user_data_dir="",
             headless=False,
+            proxy={"server": "http://127.0.0.1:38080"},
             ignore_default_args=["--enable-automation"]
         )
     else:
         raise ValueError("Invalid browser type")
 
     # Inject Stealth JS into all pages to prevent Automation Bias (Section 3.3.3)
+    stealth_path = os.path.join(os.path.dirname(__file__), "stealth.js")
     try:
-        with open("stealth.js", "r") as f:
+        with open(stealth_path, "r") as f:
             stealth_js = f.read()
             context.add_init_script(stealth_js)
     except FileNotFoundError:
-        print("[Warning] stealth.js not found. Bypassing JS stealth injection.")
+        print(f"[Warning] {stealth_path} not found. Bypassing JS stealth injection.")
 
     return context
 
