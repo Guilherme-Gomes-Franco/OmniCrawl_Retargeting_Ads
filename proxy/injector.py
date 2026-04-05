@@ -295,7 +295,7 @@ class LogHandler():
 
     def _handleLoggingCommand(self, flow):
         if 'favicon.ico' in flow.request.path:
-            flow.response = http.HTTPResponse.make(404, b'', {})
+            flow.response = http.Response.make(404, b'', {})
         elif 'start' in flow.request.path:
             # last log is timeout
             if self.log_bucket['_is_logging']:
@@ -312,7 +312,7 @@ class LogHandler():
                 if diff_msec <= (JsInjection.timeout_msec * 0.40):
                     msg = 'Ignore this early stop command'
                     ctx.log.info(msg)
-                    flow.response = http.HTTPResponse.make(200, msg, {})
+                    flow.response = http.Response.make(200, msg, {})
                 else:
                     self._stopLogging(flow)
             else:
@@ -321,7 +321,7 @@ class LogHandler():
                 # ignore this request.
                 msg = 'Ignore this duplicated stop command'
                 ctx.log.info(msg)
-                flow.response = http.HTTPResponse.make(200, msg, {})
+                flow.response = http.Response.make(200, msg, {})
         else:
             raise RuntimeError('Logging command endpoint API is not found: ' + flow.request.path)
 
@@ -356,11 +356,13 @@ class LogHandler():
         cpm_values =[]
         is_rtb_auction = False
         
-        # Check if the response is JSON and might contain bid data
-        if b'cpm' in res_content.lower() or b'seatbid' in res_content.lower() or b'price' in res_content.lower():
+        # get_text() automatically decompresses gzip/brotli payloads
+        res_text = flow.response.get_text(strict=False)
+        
+        if res_text and ('cpm' in res_text.lower() or 'seatbid' in res_text.lower() or 'price' in res_text.lower()):
             try:
                 # Decode and parse the JSON
-                json_data = json.loads(res_content.decode('utf-8', 'ignore'))
+                json_data = json.loads(res_text)
                 
                 # Check for standard OpenRTB 'seatbid' arrays
                 if 'seatbid' in json_data:
@@ -495,7 +497,7 @@ class LogHandler():
         # means the function will return after all js and HTML are loaded and executed.
         # In order to prevent browsers from hanging, we set a callback function here.
         # Therefore, the function will return and the script can still be executed.
-        flow.response = http.HTTPResponse.make(
+        flow.response = http.Response.make(
             200,
             f'''
             <a href="{self.log_bucket['url']}" rel="noreferrer" id="autoclick"></a>
@@ -512,7 +514,7 @@ class LogHandler():
         self._resetLogBucket()
         JsInjection.ending_timestamp_msec = None
 
-        flow.response = http.HTTPResponse.make(200, 'OK', {})
+        flow.response = http.Response.make(200, 'OK', {})
 
     def _forceTimeout(self, flow):
         ctx.log.info(getTime() + 'force timeout ......')
@@ -528,7 +530,7 @@ class LogHandler():
         frame_log['http_cookies'] = flow.request.headers.get('Cookie', '')
         # The main frame will have is_iframe = false
         self.log_bucket['frames'].append(frame_log)
-        flow.response = http.HTTPResponse.make(200, b'ACK', {})
+        flow.response = http.Response.make(200, b'ACK', {})
 
     '''
     This function is used to sync with the crawler.

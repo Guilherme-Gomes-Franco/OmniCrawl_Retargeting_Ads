@@ -2,8 +2,8 @@ PYTHONPATH=./scripts mitmdump -s "proxy/injector.py" \
   --set block_global=false \
   --set js_filepath="scripts/stealth.js" \
   --set timeout_msec=90000 \
-  --set log_filepath="./data/pilot.log.sqlite3" \
-  --set dump_filepath="./data/pilot.dump.sqlite3" \
+  --set log_filepath="./data/run_01_chrome.log.sqlite3" \
+  --set dump_filepath="./data/run_01_chrome.dump.sqlite3" \
   --listen-host 127.0.0.1 \
   --listen-port 38080 \
   --anticache \
