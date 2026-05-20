@@ -4,6 +4,9 @@ import socket
 import threading
 from playwright.sync_api import sync_playwright
 import argparse
+import urllib.request
+import tempfile
+import subprocess
 import sys
 import os
 
@@ -43,59 +46,89 @@ class CrawlerSyncServer(threading.Thread):
 # ==========================================================
 # 2. BROWSER SETUP & STEALTH INJECTION
 # ==========================================================
-def create_browser_context(p, browser_type, binary_path):
+def create_browser_context(p, browser_type, binary_path, is_hardened):
     """Launches native browser binaries with Playwright and forces Stealth."""
-    print(f"\n[Orchestrator] Launching {browser_type} context...")
+    print(f"\n[Orchestrator] Launching {browser_type} context (Hardened: {is_hardened})...")
     
     # Standard Windows 10 Chrome User-Agent to blend in
     SPOOFED_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    profile_dir = tempfile.mkdtemp()
+
+      # ==========================================================
+    # CERTIFICATE INJECTION (cert9.db)
+    # Prevents the need for ignore_https_errors by natively trusting mitmproxy
+    # ==========================================================
+    cert_path = os.path.expanduser("~/.mitmproxy/mitmproxy-ca-cert.pem")
+    if os.path.exists(cert_path):
+        try:
+            # 1. Initialize an empty NSS database in the temporary profile
+            subprocess.check_call([
+                "certutil", "-d", f"sql:{profile_dir}", "-N", "--empty-password"
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # 2. Inject the mitmproxy certificate as a trusted CA (Trust flags: TC,,)
+            subprocess.check_call([
+                "certutil", "-A", "-n", "mitmproxy", "-t", "TC,,", 
+                "-i", cert_path, "-d", f"sql:{profile_dir}"
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"    [+] Successfully injected mitmproxy cert into cert9.db")
+        except FileNotFoundError:
+            print("    [-] ERROR: 'certutil' not found! Run: sudo dnf install nss-tools")
+        except Exception as e:
+            print(f"    [-] ERROR injecting cert: {e}")
+    else:
+        print(f"    [-] ERROR: mitmproxy cert not found at {cert_path}")
+
+    # Common arguments for all browsers
+    launch_kwargs = {
+        "user_data_dir": profile_dir,
+        "headless": False,
+        "proxy": {"server": "http://127.0.0.1:38080"},
+        "viewport": {"width": 1920, "height": 1080}
+    }
     
+    # Only supply executable_path if we are using Brave
+    if binary_path:
+        launch_kwargs["executable_path"] = binary_path
+
     if browser_type in ["chrome", "brave"]:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir="", 
-            executable_path=binary_path,
-            headless=False,
-            proxy={"server": "http://127.0.0.1:38080"},
-            user_agent=SPOOFED_UA,
-            viewport={"width": 1920, "height": 1080},
-            ignore_default_args=[
-                "--enable-automation", 
-                "--no-sandbox", 
-                "--disable-setuid-sandbox"
-            ],
-            args=[
+        launch_kwargs.update({
+            "ignore_https_errors": True,
+            "user_agent": SPOOFED_UA,
+            "ignore_default_args": ["--enable-automation"],
+            "args": [
                 "--disable-blink-features=AutomationControlled", 
-                "--test-type", # Suppresses "Unsupported command-line flag" banners
+                "--test-type",
                 "--no-default-browser-check",
                 "--disable-search-engine-choice-screen"
             ]
-        )
+        })
+        context = p.chromium.launch_persistent_context(**launch_kwargs)
+        
     elif browser_type == "firefox":
-        # Force Firefox to trust the Fedora OS certificates (mitmproxy)
-        user_js_path = os.path.join(profile_path, 'user.js') if profile_path else "user.js"
+        user_js_path = os.path.join(profile_dir, 'user.js')
         with open(user_js_path, 'a') as f:
             f.write('\nuser_pref("dom.webdriver.enabled", false);\n')
             f.write('user_pref("useAutomationExtension", false);\n')
-            f.write('user_pref("security.enterprise_roots.enabled", true);\n') 
+            f.write('user_pref("media.eme.enabled", true);\n')
+            f.write('user_pref("browser.eme.ui.enabled", false);\n')
+            f.write('user_pref("media.gmp-widevinecdm.visible", true);\n')
+            f.write('user_pref("media.gmp-widevinecdm.enabled", true);\n')
 
-        context = p.firefox.launch_persistent_context(
-            user_data_dir=profile_path,
-            executable_path=binary_path,
-            headless=False,
-            proxy={"server": "http://127.0.0.1:38080"},
-            viewport={"width": 1920, "height": 1080},
-            ignore_default_args=["--enable-automation"]
-        )
+            if is_hardened:
+                f.write('user_pref("privacy.resistFingerprinting", true);\n')
+                f.write('user_pref("privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts", true);\n')
+                f.write('user_pref("privacy.spoof_english", 2);\n') 
+                
+        launch_kwargs.update({"ignore_default_args": ["--enable-automation"]})
+        context = p.firefox.launch_persistent_context(**launch_kwargs)
+        
     elif browser_type == "webkit":
-        context = p.webkit.launch_persistent_context(
-            user_data_dir="",
-            headless=False,
-            proxy={"server": "http://127.0.0.1:38080"},
-            viewport={"width": 1920, "height": 1080},
-            ignore_default_args=["--enable-automation"]
-        )
-    else:
-        raise ValueError("Invalid browser type")
+        launch_kwargs.update({
+            "ignore_https_errors": True,
+            "ignore_default_args": ["--enable-automation"]
+        })
+        context = p.webkit.launch_persistent_context(**launch_kwargs)
 
     # Inject Stealth JS into all pages to prevent Automation Bias (Section 3.3.3)
     stealth_path = os.path.join(os.path.dirname(__file__), "stealth.js")
@@ -139,76 +172,58 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
                 
             print("    [+] Arrived at target. Waiting 15s for RTB auctions...")
 
-              # ==========================================
-            # 2.5 AUTO-ACCEPT COOKIES (To unblock ad auctions hidden behind CMPs)
             # ==========================================
-            print("    [+] Hunting for CMP banners (polling for up to 10 seconds)...")
+            # 2.5 AUTO-ACCEPT COOKIES (Native JS Frame-Piercing)
+            # ==========================================
+            print("    [+] Hunting for CMP banners (Fast JS Evaluation)...")
             try:
-                accept_texts =[
-                    'Accept All', 'Accept all', 'Accept All Cookies', 'Accept cookies', 'Accept',
-                    'I Accept', 'Yes, I’m happy', 'Allow All', 'Allow all',
-                    'Aceitar todos', 'Permitir todos', 'Aceitar e fechar'
-                ]
-                
                 banner_clicked = False
                 
-                # Poll for up to 10 seconds to allow slow CMP scripts to load
+                # This raw JavaScript executes natively inside the browser engine,
+                # bypassing Playwright's Python IPC deadlock completely.
+                js_clicker = """
+                () => {
+                    // 1. Try CSS Selectors (Zero false positives)
+                    const selectors = "#onetrust-accept-btn-handler, button.sp_choice_type_11, .didomi-continue-button, .qc-cmp2-b-agree, #uc-btn-accept-banner, button#accept-btn, .qc-cmp2-summary-buttons button[mode='primary']";
+                    const btn = document.querySelector(selectors);
+                    if (btn) { btn.click(); return true; }
+                    
+                    // 2. Try Text Matching (Case-insensitive)
+                    const texts = ['accept all', 'accept all cookies', 'accept cookies', 'i accept', 'i agree', 'yes, i’m happy', 'allow all', 'aceitar todos', 'permitir todos', 'aceitar e fechar', 'concordo'];
+                    const elements = [...document.querySelectorAll("button, div[role='button']")];
+                    for (const el of elements) {
+                        const inner = el.innerText.trim().toLowerCase();
+                        if (texts.includes(inner)) {
+                            el.click(); return true;
+                        }
+                    }
+                    return false;
+                }
+                """
+                
+                # Poll up to 10 times (10 seconds)
                 for attempt in range(10):
-                    if banner_clicked:
-                        break
-                        
+                    if banner_clicked: break
+                    
+                    # Run the JS natively inside every available frame
                     for frame in page.frames:
-                        if banner_clicked:
-                            break
-                        
-                        # 1. Check known CMP CSS IDs/Classes (Zero false positives)
                         try:
-                            # ADDED: button#accept-btn and .qc-cmp2-summary-buttons button[mode="primary"] for custom Quantcast
-                            cmp_selectors = (
-                                "#onetrust-accept-btn-handler, button.sp_choice_type_11, "
-                                ".didomi-continue-button, .qc-cmp2-b-agree, #uc-btn-accept-banner, "
-                                "button#accept-btn, .qc-cmp2-summary-buttons button[mode='primary']"
-                            )
-                            cmp_btn = frame.locator(cmp_selectors).first
-                            
-                            if cmp_btn.is_visible():
-                                cmp_btn.click(force=True)
-                                print(f"    [+] Clicked known CMP banner via CSS in frame: {frame.name}")
+                            # .evaluate() is instant and will not hang the Python thread
+                            if frame.evaluate(js_clicker):
+                                print(f"    [+] CMP Banner Clicked in frame: {frame.name}")
                                 banner_clicked = True
                                 break
                         except:
-                            pass
+                            pass # Safely ignore cross-origin access errors
                             
-                        # 2. Check Strict Text Matches (Multi-word only)
-                        if not banner_clicked:
-                            # ADDED: 'I agree', 'I Agree', and 'Concordo'
-                            accept_texts =[
-                                'Accept All', 'Accept all', 'Accept All Cookies', 'Accept cookies', 
-                                'I Accept', 'I agree', 'I Agree', 'Yes, I’m happy', 'Allow All', 'Allow all',
-                                'Aceitar todos', 'Permitir todos', 'Aceitar e fechar', 'Concordo'
-                            ]
-                            
-                            for text in accept_texts:
-                                try:
-                                    txt_btn = frame.locator(f"button:has-text('{text}'), div[role='button']:has-text('{text}')").first
-                                    if txt_btn.is_visible():
-                                        txt_btn.click(force=True)
-                                        print(f"    [+] Clicked banner using strict text '{text}' in frame: {frame.name}")
-                                        banner_clicked = True
-                                        break
-                                except:
-                                    pass
-
                     if not banner_clicked:
-                        # Wait 1 second before scanning the DOM/Frames again
-                        page.wait_for_timeout(1000) 
+                        page.wait_for_timeout(1000)
 
                 if banner_clicked:
-                    # Give the page 3 seconds to drop the cookies and fire the Prebid.js tags
-                    page.wait_for_timeout(3000)
+                    page.wait_for_timeout(3000) # Wait for cookies to drop
                 else:
-                    print("    [-] No banner found after 10 seconds.")
-                    
+                    print("    [-] No banner found/clickable.")
+
             except Exception as e:
                 print(f"    [-] Banner clicker encountered an error: {e}")
             # ==========================================
@@ -228,17 +243,25 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
             print(f"[Error] Failed during execution of {site}: {e}")
             
         finally:
-            # 5. Stop logging using a background API call (doesn't disrupt the page)
+            # 5. Stop logging (Out-of-Band Python Request)
+            # This completely bypasses the browser, eliminating WebKit freezes and CORS errors.
             try:
-                page.goto("http://240.240.240.240/stop", wait_until="commit", timeout=5000)
-                time.sleep(1) # Brief pause for proxy to commit SQLite transaction
-            except Exception:
-                pass
+                # Configure Python to route its request through our mitmproxy
+                proxy_support = urllib.request.ProxyHandler({'http': 'http://127.0.0.1:38080'})
+                opener = urllib.request.build_opener(proxy_support)
+                
+                # Send the stop command directly to the proxy
+                opener.open("http://240.240.240.240/stop", timeout=5)
+                time.sleep(1.5) # Brief pause for proxy to commit SQLite transaction
+                print("    [+] Proxy logging stopped cleanly.")
+            except Exception as e:
+                print(f"    [-] Proxy stop signal failed: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="ETR Causal Inference Orchestrator")
     parser.add_argument("--browser", choices=["chrome", "brave", "firefox", "webkit"], required=True)
     parser.add_argument("--binary", help="Path to native browser executable (Chrome/Brave/Firefox)", default="")
+    parser.add_argument("--hardened", action="store_true", help="Enable Firefox RFP or Brave Strict")
     args = parser.parse_args()
 
     # Define your domains for the Causal Workflow
@@ -265,7 +288,7 @@ def main():
             # =========================================================
             # PHASE 1: Persona Training & Baseline Measurement
             # =========================================================
-            context = create_browser_context(p, args.browser, args.binary)
+            context = create_browser_context(p, args.browser, args.binary, args.hardened)
             
             print("\n=== [Phase 1A] Building High-Value Persona ===")
             # We visit seeder sites to drop 3rd-party cookies & fingerprints into the network
@@ -288,7 +311,7 @@ def main():
             # =========================================================
             # Re-launch with the exact same binary and stealth config.
             # Trackers must rely solely on Stateless Fingerprinting to re-identify us.
-            context = create_browser_context(p, args.browser, args.binary)
+            context = create_browser_context(p, args.browser, args.binary, args.hardened)
             
             print("\n=== [Phase 3] Measuring Defense Efficacy ===")
             # Revisit the exact same publishers. If CPMs are just as high as Phase 1B, tracking persisted!

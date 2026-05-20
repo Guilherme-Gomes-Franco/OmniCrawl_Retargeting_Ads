@@ -351,17 +351,15 @@ class LogHandler():
             self.dump_db.insert(res_uid, res_content, commit=False)
 
         # THESIS METHODOLOGY: ETR METRIC EXTRACTION
-        
-        # --- SILO 1: RTB Economics (Prebid.js & OpenRTB Parsing) ---
-        cpm_values =[]
+       # --- SILO 1: RTB Economics (Prebid.js & OpenRTB Parsing) ---
+        cpm_values = {}  # Changed to a dictionary: { "ad_slot_id": [bid1, bid2] }
+        max_cpm = 0.0
         is_rtb_auction = False
         
-        # get_text() automatically decompresses gzip/brotli payloads
         res_text = flow.response.get_text(strict=False)
         
         if res_text and ('cpm' in res_text.lower() or 'seatbid' in res_text.lower() or 'price' in res_text.lower()):
             try:
-                # Decode and parse the JSON
                 json_data = json.loads(res_text)
                 
                 # Check for standard OpenRTB 'seatbid' arrays
@@ -369,37 +367,57 @@ class LogHandler():
                     is_rtb_auction = True
                     for seat in json_data['seatbid']:
                         for bid in seat.get('bid',[]):
-                            if 'price' in bid: cpm_values.append(bid['price'])
-                            elif 'cpm' in bid: cpm_values.append(bid['cpm'])
+                            price = float(bid.get('price', bid.get('cpm', 0.0)))
+                            if price > 0.0:
+                                # Extract the Impression ID (impid), default to 'unknown_slot'
+                                ad_slot = bid.get('impid', 'unknown_slot')
+                                
+                                if ad_slot not in cpm_values:
+                                    cpm_values[ad_slot] = []
+                                cpm_values[ad_slot].append(price)
+                                
+                                if price > max_cpm: 
+                                    max_cpm = price
                 
                 # Check for Prebid.js specific response formats
                 elif 'bids' in json_data:
                     is_rtb_auction = True
                     for bid in json_data['bids']:
-                        if 'cpm' in bid: cpm_values.append(bid['cpm'])
+                        price = float(bid.get('cpm', 0.0))
+                        if price > 0.0:
+                            # Prebid uses adUnitCode, fallback to impid
+                            ad_slot = bid.get('adUnitCode', bid.get('impid', 'unknown_slot'))
+                            
+                            if ad_slot not in cpm_values:
+                                cpm_values[ad_slot] = []
+                            cpm_values[ad_slot].append(price)
+                            
+                            if price > max_cpm: 
+                                max_cpm = price
             except:
                 pass # Not a valid JSON or parsing failed
+
+        # Calculate the max CPM for easy $\Delta$ checks, but preserve all raw bids
+        max_cpm = max(cpm_values) if cpm_values else 0.0
 
         # --- SILO 2: Network Identifiers (UID Smuggling & CSync) ---
         is_csync = False
         smuggled_uids = {}
-        
+
         # 2A. Detect Cookie Synchronization (CSync) via 3xx Redirects
         if flow.response.status_code in[301, 302, 303, 307, 308]:
             location = flow.response.headers.get("Location", "")
             if 'sync' in flow.request.url.lower() or 'sync' in location.lower():
                 is_csync = True
-                
-        # 2B. Detect UID Smuggling in the URL Query Parameters
+
+        # 2B. Detect UID Smuggling in the URL Query Parameters   
         parsed_url = urlparse(flow.request.url)
         query_params = parse_qs(parsed_url.query)
         
         for key, values in query_params.items():
             key_lower = key.lower()
-            # Look for common tracking ID parameters
-            if any(id_trigger in key_lower for id_trigger in['uid', 'id', 'uuid', 'pid', 'click']):
+            if any(id_trigger in key_lower for id_trigger in ['uid', 'id', 'uuid', 'pid', 'click']):
                 for val in values:
-                    # If the parameter value is long (high entropy), it's a tracking ID, not a generic page id (like id=1)
                     if len(val) > 10: 
                         smuggled_uids[key] = val
 
@@ -420,7 +438,8 @@ class LogHandler():
             # ---> THESIS: ETR METRICS APPENDED HERE <---
             'etr_metrics': {
                 'is_rtb': is_rtb_auction,
-                'cpm_values': cpm_values,
+                'max_cpm': max_cpm,           # Stored for easy Mann-Whitney U test calculations
+                'cpm_values': cpm_values,     # Stored for distribution/variance transparency
                 'is_csync': is_csync,
                 'smuggled_uids': smuggled_uids
             },

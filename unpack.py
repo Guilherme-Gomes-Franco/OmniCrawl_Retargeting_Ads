@@ -49,7 +49,7 @@ def analyze_etr_metrics(path):
                 req_url = req.get('url', '')
                 short_url = req_url[:75] + "..." if len(req_url) > 75 else req_url
                 print(f"  [+] RTB Auction | {short_url}")
-                print(f"      -> CPM Bids: {etr.get('cpm_values')}")
+                print(f"      -> Max CPM: {etr.get('max_cpm')} | All Bids: {etr.get('cpm_values')}")
             
             # 2. Silo 2: Check UID Smuggling & CSync
             if etr.get('is_csync') or etr.get('smuggled_uids'):

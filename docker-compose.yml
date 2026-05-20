@@ -1,0 +1,14 @@
+services:
+  worker:
+    build: .
+    image: omnicrawl-worker
+    shm_size: '2gb'
+    # I'm not doing GPU passthrough right now, we omit --device /dev/dri.
+    # If I need to add it back later, use:
+    # devices:
+    #   - "/dev/dri:/dev/dri"
+    volumes:
+      # Mount data folder (with :Z for Fedora SELinux permissions)
+      - ./data:/app/data:Z
+      # Mount scripts folder so Python changes don't require a full rebuild
+      - ./scripts:/app/scripts:Z
