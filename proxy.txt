@@ -8,3 +8,27 @@ PYTHONPATH=./scripts mitmdump -s "proxy/injector.py" \
   --listen-port 38080 \
   --anticache \
   --no-http2
+
+
+
+
+
+
+
+  @inproceedings{LePochat2019,
+   author = "{Le Pochat}, Victor and {Van Goethem}, Tom and Tajalizadehkhoob, Samaneh and Korczy\'{n}ski, Maciej and Joosen, Wouter",
+    title = "Tranco: A Research-Oriented Top Sites Ranking Hardened Against Manipulation",
+booktitle = {Proceedings of the 26th Annual Network and Distributed System Security Symposium},
+   series = {NDSS 2019},
+     year = 2019,
+    month = feb,
+      doi = {10.14722/ndss.2019.23386},
+  }
+
+  We use the Tranco list* [1] generated on 09 June 2026, ...
+* Available at https://tranco-list.eu/list/XLXNN.
+
+
+Per Site: ~30-40 seconds.
+1,000 Sites: ~11 hours per Phase.
+Total Workflow (Phase 1B + Phase 3): ~22 hours per browser.

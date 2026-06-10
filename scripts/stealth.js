@@ -11,10 +11,29 @@
         });
     } catch (e) { }
 
+    // Enhanced Chrome Object Mocking
     if (!window.chrome) {
         window.chrome = {};
     }
-    window.chrome.runtime = {};
+    if (!window.chrome.runtime) {
+        window.chrome.runtime = {
+            id: "pkedcjkdefomeocpogpadimmcbebmjbe", // Standard Google Cast extension ID
+            sendMessage: function () { },
+            getManifest: function () { return { version: "1.0" }; },
+            onMessage: { addListener: function () { }, removeListener: function () { } }
+        };
+    }
+  
+    window.chrome.csi = function () { };
+    window.chrome.loadTimes = function () { };
+
+    // WAFs check for these specifically in Chrome
+    window.chrome.app = {
+        isInstalled: false,
+        InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+        RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+    };
+
     // 3. Mock navigator.plugins and navigator.mimeTypes
     // Headless/Automated browsers often report 0 plugins, which is a massive red flag for bots.
     // We mock the standard Chrome PDF Viewer.

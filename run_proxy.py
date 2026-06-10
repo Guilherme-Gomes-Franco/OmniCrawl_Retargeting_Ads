@@ -34,7 +34,8 @@ def main():
         "--listen-host", "127.0.0.1",
         "--listen-port", "38080",
         "--anticache",
-        "--no-http2"
+        "--no-http2",
+        "--set", "http2=false"
     ]
 
     # Inject PYTHONPATH so injector.py can find scripts/sqlitedb.py
