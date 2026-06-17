@@ -1,45 +1,21 @@
-2026/06/12-15:54:40.391 3b612 Reusing MANIFEST /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/06/12-15:54:40.396 3b612 Recovering log #19
-2026/06/12-15:54:40.397 3b612 Reusing old log /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/000019.log 
-2026/06/12-15:54:45.660 3b614 Level-0 table #23: started
-2026/06/12-15:54:45.664 3b614 Level-0 table #23: 19742 bytes OK
-2026/06/12-15:54:45.672 3b614 Delete type=0 #19
-2026/06/12-15:55:34.545 3b614 Level-0 table #25: started
-2026/06/12-15:55:34.550 3b614 Level-0 table #25: 85468 bytes OK
-2026/06/12-15:55:34.558 3b614 Delete type=0 #22
-2026/06/12-15:55:34.558 3b614 Compacting 4@0 + 1@1 files
-2026/06/12-15:55:34.569 3b614 Generated table #26@0: 996 keys, 195728 bytes
-2026/06/12-15:55:34.569 3b614 Compacted 4@0 + 1@1 files => 195728 bytes
-2026/06/12-15:55:34.575 3b614 compacted to: files[ 0 1 1 0 0 0 0 ]
-2026/06/12-15:55:34.576 3b614 Delete type=2 #16
-2026/06/12-15:55:34.576 3b614 Delete type=2 #18
-2026/06/12-15:55:34.576 3b614 Delete type=2 #20
-2026/06/12-15:55:34.576 3b614 Delete type=2 #23
-2026/06/12-15:55:34.576 3b614 Delete type=2 #25
-2026/06/12-16:01:16.385 3b614 Level-0 table #28: started
-2026/06/12-16:01:16.392 3b614 Level-0 table #28: 41190 bytes OK
-2026/06/12-16:01:16.400 3b614 Delete type=0 #24
-2026/06/12-16:09:37.169 3b612 Level-0 table #30: started
-2026/06/12-16:09:37.174 3b612 Level-0 table #30: 24197 bytes OK
-2026/06/12-16:09:37.181 3b612 Delete type=0 #27
-2026/06/12-16:12:43.003 3b614 Level-0 table #32: started
-2026/06/12-16:12:43.009 3b614 Level-0 table #32: 22826 bytes OK
-2026/06/12-16:12:43.015 3b614 Delete type=0 #29
-2026/06/12-16:14:43.207 3b614 Level-0 table #34: started
-2026/06/12-16:14:43.211 3b614 Level-0 table #34: 26865 bytes OK
-2026/06/12-16:14:43.218 3b614 Delete type=0 #31
-2026/06/12-16:14:43.218 3b614 Compacting 4@0 + 1@1 files
-2026/06/12-16:14:43.227 3b614 Generated table #35@0: 1138 keys, 210411 bytes
-2026/06/12-16:14:43.227 3b614 Compacted 4@0 + 1@1 files => 210411 bytes
-2026/06/12-16:14:43.233 3b614 compacted to: files[ 0 1 1 0 0 0 0 ]
-2026/06/12-16:14:43.233 3b614 Delete type=2 #26
-2026/06/12-16:14:43.233 3b614 Delete type=2 #28
-2026/06/12-16:14:43.233 3b614 Delete type=2 #30
-2026/06/12-16:14:43.233 3b614 Delete type=2 #32
-2026/06/12-16:14:43.233 3b614 Delete type=2 #34
-2026/06/12-16:15:23.639 3b614 Level-0 table #37: started
-2026/06/12-16:15:23.642 3b614 Level-0 table #37: 28268 bytes OK
-2026/06/12-16:15:23.649 3b614 Delete type=0 #33
-2026/06/12-16:17:18.935 3b614 Level-0 table #39: started
-2026/06/12-16:17:18.942 3b614 Level-0 table #39: 97143 bytes OK
-2026/06/12-16:17:18.949 3b614 Delete type=0 #36
+2026/06/12-16:19:50.969 3ee93 Reusing MANIFEST /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/06/12-16:19:50.973 3ee93 Recovering log #38
+2026/06/12-16:19:50.973 3ee93 Reusing old log /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/000038.log 
+2026/06/12-16:20:04.108 3ee96 Level-0 table #42: started
+2026/06/12-16:20:04.112 3ee96 Level-0 table #42: 15300 bytes OK
+2026/06/12-16:20:04.119 3ee96 Delete type=0 #38
+2026/06/12-16:20:11.795 3ee96 Level-0 table #44: started
+2026/06/12-16:20:11.801 3ee96 Level-0 table #44: 98053 bytes OK
+2026/06/12-16:20:11.809 3ee96 Delete type=0 #41
+2026/06/12-16:20:11.810 3ee96 Compacting 4@0 + 1@1 files
+2026/06/12-16:20:11.822 3ee96 Generated table #45@0: 1917 keys, 221291 bytes
+2026/06/12-16:20:11.822 3ee96 Compacted 4@0 + 1@1 files => 221291 bytes
+2026/06/12-16:20:11.828 3ee96 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/06/12-16:20:11.829 3ee96 Delete type=2 #35
+2026/06/12-16:20:11.829 3ee96 Delete type=2 #37
+2026/06/12-16:20:11.829 3ee96 Delete type=2 #39
+2026/06/12-16:20:11.829 3ee96 Delete type=2 #42
+2026/06/12-16:20:11.829 3ee96 Delete type=2 #44
+2026/06/12-16:28:17.185 3ee93 Level-0 table #47: started
+2026/06/12-16:28:17.200 3ee93 Level-0 table #47: 19414 bytes OK
+2026/06/12-16:28:17.219 3ee93 Delete type=0 #43

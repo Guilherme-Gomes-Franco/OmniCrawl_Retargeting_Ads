@@ -17,6 +17,10 @@ declare -a experiments=(
     "firefox hardened"
 )
 
+# Divide 150 sites into batches of 30
+BATCH_SIZE=30
+TOTAL_SITES=150
+
 for exp in "${experiments[@]}"; do
     read -r BROWSER MODE <<< "$exp"
     

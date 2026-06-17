@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from email import parser
 import time
 import socket
 import threading
@@ -11,6 +12,35 @@ import csv
 import os
 import re
 from datetime import datetime
+
+
+# Determine where we are: Docker uses /app, Local uses the script's parent folder
+if os.path.exists("/app"):
+    PROJECT_ROOT = "/app"
+    DATA_DIR = "/app/data"
+else:
+    # On your Fedora machine, this is the folder containing 'scripts' and 'data'
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+# Ensure data directory exists
+os.makedirs(DATA_DIR, exist_ok=True)
+print(f"[*] Environment Detected. Project Root: {PROJECT_ROOT} | Data Dir: {DATA_DIR}")
+
+def log_progress(browser, phase, site, status, cmp_status, duration):
+    log_file = os.path.join(DATA_DIR, f"heartbeat_{browser}.csv")
+    try:
+        file_exists = os.path.isfile(log_file)
+        with open(log_file, "a", newline='') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["timestamp", "phase", "site", "status", "cmp_method", "duration_sec"])
+            writer.writerow([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                phase, site, status, cmp_status, round(duration, 2)
+            ])
+    except Exception as e:
+        print(f"    [!] Internal Logging Error: {e}")
 
 # ==========================================================
 # 1. THE TCP SYNC SERVER (To handshake with mitmproxy)
@@ -25,19 +55,6 @@ class CrawlerSyncServer(threading.Thread):
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
         self.running = True
-
-
-    def log_progress(browser, phase, site, status, cmp_status, duration):
-        log_file = f"/app/data/heartbeat_{browser}.csv"
-        file_exists = os.path.isfile(log_file)
-        with open(log_file, "a", newline='') as f:
-         writer = csv.writer(f)
-         if not file_exists:
-            writer.writerow(["timestamp", "phase", "site", "status", "cmp_method", "duration_sec"])
-        writer.writerow([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                phase, site, status, cmp_status, round(duration, 2)
-        ])
 
     def run(self):
         print(f"[Sync Server] Listening for proxy handshakes on {self.host}:{self.port}")
@@ -61,7 +78,7 @@ class CrawlerSyncServer(threading.Thread):
 # ==========================================================
 # 2. BROWSER SETUP & STEALTH INJECTION
 # ==========================================================
-def create_browser_context(p, browser_type, binary_path, is_hardened):
+def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port):
     """Launches native browser binaries with Playwright and forces Stealth."""
     print(f"\n[Orchestrator] Launching {browser_type} context (Hardened: {is_hardened})...")
     
@@ -71,8 +88,7 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
      # --- BRAVE STRICT PROFILE HANDLING ---
     if browser_type == "brave" and is_hardened:
         # Dynamically find the project root (one folder above the 'scripts' directory)
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        profile_dir = os.path.join(project_root, "brave_strict_profile")
+        profile_dir = os.path.join(PROJECT_ROOT, "brave_strict_profile")
         
         if not os.path.exists(profile_dir):
             print(f"    [!] WARNING: Brave Strict profile not found at {profile_dir}. Tracking protection may fail.")
@@ -122,7 +138,7 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
     launch_kwargs = {
         "user_data_dir": profile_dir,
         "headless": False,
-        "proxy": {"server": "http://127.0.0.1:38080"},
+        "proxy": {"server": f"http://127.0.0.1:{proxy_port}"},
         "viewport": {"width": 1920, "height": 1080}
     }
     
@@ -146,7 +162,12 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
                 "--no-default-browser-check",
                 "--disable-search-engine-choice-screen",
                 "--no-sandbox",
-                "--disable-dev-shm-usage"
+                "--disable-dev-shm-usage",
+                "--no-first-run",           # Skip welcome screens
+                "--no-welcome",             # Skip welcome screens
+                "--disable-features=BraveRewards,BraveNews", # Disable Brave extras
+                "--disable-brave-update",        # Stop Brave update checks
+                "--restore-last-session=false",  # Force clean start
             ]
         })
         context = p.chromium.launch_persistent_context(**launch_kwargs)
@@ -181,7 +202,7 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
         raise ValueError("Invalid browser type")
 
     # Inject Stealth JS into all pages to prevent Automation Bias (Section 3.3.3)
-    stealth_path = os.path.join(os.path.dirname(__file__), "stealth.js")
+    stealth_path = os.path.join(PROJECT_ROOT, "scripts", "stealth.js")
     try:
         with open(stealth_path, "r") as f:
             stealth_js = f.read()
@@ -198,19 +219,18 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
     """Executes a single phase by driving the browser and commanding the proxy."""
     print(f"\n=== Starting {phase_name} ({browser_id}) ===")
 
-    # Use ONE tab to prevent page.close() IPC deadlocks
-    page = context.new_page()
+    if len(context.pages) > 0:
+            page = context.pages[0]
+    else:
+            page = context.new_page()
+    
+    # Close any other trailing tabs that might have opened
+    for p in context.pages[1:]:
+        try: p.close()
+        except: pass
 
-    # --- DEFENSE VERIFICATION CHECK ---
-    try:
-        if browser_type == "firefox":
-            tz = page.evaluate("Intl.DateTimeFormat().resolvedOptions().timeZone")
-            print(f"    [+] Defense Check: Firefox Timezone is '{tz}' (RFP forces UTC)")
-        elif browser_type == "brave":
-            is_brave = page.evaluate("(navigator.brave && navigator.brave.isBrave) ? true : false")
-            print(f"    [+] Defense Check: Browser is Brave = {is_brave}")
-    except: pass
-    # ----------------------------------
+    # Global timeout for any single playwright action (30s)
+    page.set_default_timeout(30000)
     
     try:
         page.route("**/*.{mp4,webm,ogg,mov,avi}", lambda route: route.abort())
@@ -218,6 +238,11 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
         pass
 
     for site in target_sites:
+        start_time = time.perf_counter()
+
+        status = "SUCCESS"
+        cmp_result = "NONE"
+
         print(f" -> Visiting: {site}")
         start_api = f"http://240.240.240.240/start?url={site}&browser={browser_id}_{phase_name}&sync_host=127.0.0.1&sync_port={sync_port}&scroll=true"
         
@@ -229,6 +254,7 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
                 page.wait_for_load_state("domcontentloaded", timeout=15000)
             except Exception as e:
                 print(f"    [!] Timeout or Error on {site}. Skipping to next site...")
+                status = f"NAV_ERROR: {str(e)[:30]}"
                 continue # Move to the next site in SEEDER_SITES (finally block will still execute to stop proxy)
 
             print("    [+] Arrived at target. Waiting 15s for RTB auctions...")
@@ -271,6 +297,7 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
                     if api_result:
                         print(f"    [+] CMP Banner Accepted instantly via {api_result}!")
                         banner_clicked = True
+                        cmp_result = api_result
                 except:
                     pass
 
@@ -363,8 +390,16 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
             
         except Exception as e:
             print(f"[Error] Failed during execution of {site}: {e}")
+            status = f"NAV_ERROR: {str(e)[:30]}"
             
         finally:
+
+              # Calculate duration
+            duration = time.perf_counter() - start_time
+
+            #For debugging, print the status and duration
+            log_progress(browser_id, phase_name, site, status, cmp_result, duration)
+
             # 5. Stop logging (Out-of-Band Python Request)
             try:
                 proxy_support = urllib.request.ProxyHandler({'http': 'http://127.0.0.1:38080'})
@@ -378,6 +413,8 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
             try:
                 page.evaluate("setTimeout(() => { document.body.innerHTML = ''; }, 0)")
                 time.sleep(1)
+                  # Navigating to about:blank is safer than page.close() in WebKit/Brave
+                page.goto("about:blank", timeout=5000)
             except: pass
 
 def main():
@@ -385,6 +422,9 @@ def main():
     parser.add_argument("--browser", choices=["chrome", "brave", "firefox", "webkit"], required=True)
     parser.add_argument("--binary", help="Path to native browser executable (Chrome/Brave/Firefox)", default="")
     parser.add_argument("--hardened", action="store_true", help="Enable Firefox RFP or Brave Strict")
+    parser.add_argument("--start-idx", type=int, default=0)
+    parser.add_argument("--end-idx", type=int, default=None)
+    parser.add_argument("--proxy-port", type=int, default=38080)
     args = parser.parse_args()
 
     # Define your domains for the Causal Workflow
@@ -434,7 +474,7 @@ def main():
             # =========================================================
             # PHASE 1: Persona Training & Baseline Measurement
             # =========================================================
-            context = create_browser_context(p, args.browser, args.binary, args.hardened)
+            context = create_browser_context(p, args.browser, args.binary, args.hardened, args.proxy_port)
             
             print("\n=== [Phase 1A] Building High-Value Persona ===")
             # We visit seeder sites to drop 3rd-party cookies & fingerprints into the network
@@ -442,7 +482,13 @@ def main():
             
             print("\n=== [Phase 1B] Establishing Baseline CPM ===")
             # We visit the publishers NOW to record how much DSPs bid for our "Known" High-Value Persona
-            run_crawl_phase(context, "Phase1B_PreBreak", args.browser, PUBLISHER_SITES, sync_port)
+            if args.end_idx is None or args.end_idx > len(PUBLISHER_SITES):
+                args.end_idx = len(PUBLISHER_SITES)
+            if args.start_idx >= len(PUBLISHER_SITES):
+                args.start_idx = 0
+            current_publishers = PUBLISHER_SITES[args.start_idx:args.end_idx]
+
+            run_crawl_phase(context, "Phase1B_PreBreak", args.browser, current_publishers, sync_port)
             
             # =========================================================
             # PHASE 2: The Identity Break
@@ -457,14 +503,14 @@ def main():
             # =========================================================
             # Re-launch with the exact same binary and stealth config.
             # Trackers must rely solely on Stateless Fingerprinting to re-identify us.
-            context = create_browser_context(p, args.browser, args.binary, args.hardened)
+            context = create_browser_context(p, args.browser, args.binary, args.hardened, args.proxy_port)
 
             # Force Playwright to throw an error instead of hanging infinitely if the browser crashes
             context.set_default_timeout(30000)
             
             print("\n=== [Phase 3] Measuring Defense Efficacy ===")
             # Revisit the exact same publishers. If CPMs are just as high as Phase 1B, tracking persisted!
-            run_crawl_phase(context, "Phase3_PostBreak", args.browser, PUBLISHER_SITES, sync_port)
+            run_crawl_phase(context, "Phase3_PostBreak", args.browser, current_publishers, sync_port)
             
             context.close()
 

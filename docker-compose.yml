@@ -1,18 +1,28 @@
 services:
-  worker:
+  worker_1:
     build: .
-    image: omnicrawl-worker
-    shm_size: '8gb'
+    shm_size: '2gb'
     environment:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
-    # I'm not doing GPU passthrough right now, we omit --device /dev/dri.
-    # If I need to add it back later, use:
-    # devices:
-    #   - "/dev/dri:/dev/dri"
+      - START_IDX=0
+      - END_IDX=50
+      - PROXY_PORT=38080
+      - DISPLAY_NUM=99
     volumes:
-      # Mount data folder (with :Z for Fedora SELinux permissions)
       - ./data:/app/data:Z
-      # Mount scripts folder so Python changes don't require a full rebuild
-      - ./scripts:/app/scripts:Z
+      - ./brave_strict_profile:/app/brave_strict_profile:Z
+
+  worker_2:
+    build: .
+    shm_size: '2gb'
+    environment:
+      - BROWSER=${BROWSER}
+      - HARDENED=${HARDENED}
+      - START_IDX=50
+      - END_IDX=100
+      - PROXY_PORT=38081
+      - DISPLAY_NUM=100
+    volumes:
+      - ./data:/app/data:Z
       - ./brave_strict_profile:/app/brave_strict_profile:Z
