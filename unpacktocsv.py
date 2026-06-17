@@ -5,8 +5,8 @@ import json
 import csv
 from pathlib import Path
 
-log_db = Path("data/pilot.log.sqlite3")
-dump_db = Path("data/pilot.dump.sqlite3")
+log_db = Path("data/brave.log.sqlite3")
+dump_db = Path("data/brave.dump.sqlite3")
 out_dir = Path("output")
 out_dir.mkdir(exist_ok=True)
 
@@ -37,7 +37,7 @@ def export_log_db():
 
     conn.close()
 
-    csv_path = out_dir / "pilot_log_decompressed.csv"
+    csv_path = out_dir / "brave_log_decompressed.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
@@ -69,7 +69,7 @@ def export_dump_db():
 
     conn.close()
 
-    csv_path = out_dir / "pilot_dump_index.csv"
+    csv_path = out_dir / "brave_dump_index.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,

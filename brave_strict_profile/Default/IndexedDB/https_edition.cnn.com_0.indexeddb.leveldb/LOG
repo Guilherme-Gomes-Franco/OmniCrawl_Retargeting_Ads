@@ -1,0 +1,7 @@
+2026/06/12-16:20:00.978 3ee31 Reusing MANIFEST /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/IndexedDB/https_edition.cnn.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/06/12-16:20:00.978 3ee31 Recovering log #3
+2026/06/12-16:20:00.980 3ee31 Reusing old log /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/IndexedDB/https_edition.cnn.com_0.indexeddb.leveldb/000003.log 
+2026/06/12-16:27:06.870 3ee53 Level-0 table #5: started
+2026/06/12-16:27:11.857 3ee53 Level-0 table #5: 811037 bytes OK
+2026/06/12-16:27:12.700 3ee53 Delete type=0 #3
+2026/06/12-16:27:13.174 3ee31 Manual compaction at level-0 from '\x00\x05\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x06\x00\x00\x00' @ 0 : 0; will stop at (end)

@@ -1,13 +1,9 @@
 #!/bin/bash
 set -e
 
-BROWSER=$1
-HARDENED_FLAG=$2
-
-if [ -z "$BROWSER" ]; then
-  echo "[!] No browser specified. Defaulting to chrome."
-  BROWSER="chrome"
-fi
+# Use variables from OAR/Docker-Compose environment
+BROWSER=${BROWSER:-chrome}
+HARDENED_FLAG=${HARDENED:-""}
 
 # 1. Start the Virtual Display (Xvfb)
 export DISPLAY=:99
@@ -23,8 +19,8 @@ fi
 
 # 3. Create a unique identifier
 RUN_ID="${BROWSER}_$(date +%s)_$RANDOM"
-LOG_DB="/app/data/${RUN_ID}.log.sqlite3"
-DUMP_DB="/app/data/${RUN_ID}.dump.sqlite3"
+LOG_DB="/tmp/${RUN_ID}.log.sqlite3"
+DUMP_DB="/tmp/${RUN_ID}.dump.sqlite3"
 
 echo "[*] Container initialized. Run ID: $RUN_ID"
 
@@ -66,6 +62,11 @@ if [ -n "$BIN_PATH" ]; then
 else
     python3 scripts/orchestration.py --browser "$BROWSER" $HARDENED_FLAG
 fi
+
+# 6. SHUTDOWN & DATA MIGRATION
+echo "[*] Moving database from local container storage to NFS..."
+mv "$LOCAL_LOG_DB" /app/data/
+mv "$LOCAL_DUMP_DB" /app/data/
 
 echo "[*] Crawl finished. Shutting down."
 kill $PROXY_PID

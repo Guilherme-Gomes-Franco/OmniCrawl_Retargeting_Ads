@@ -3,6 +3,9 @@ services:
     build: .
     image: omnicrawl-worker
     shm_size: '8gb'
+    environment:
+      - BROWSER=${BROWSER}
+      - HARDENED=${HARDENED}
     # I'm not doing GPU passthrough right now, we omit --device /dev/dri.
     # If I need to add it back later, use:
     # devices:
@@ -12,3 +15,4 @@ services:
       - ./data:/app/data:Z
       # Mount scripts folder so Python changes don't require a full rebuild
       - ./scripts:/app/scripts:Z
+      - ./brave_strict_profile:/app/brave_strict_profile:Z

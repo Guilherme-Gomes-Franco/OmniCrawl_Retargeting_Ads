@@ -7,9 +7,10 @@ import argparse
 import urllib.request
 import tempfile
 import subprocess
-import sys
+import csv
 import os
 import re
+from datetime import datetime
 
 # ==========================================================
 # 1. THE TCP SYNC SERVER (To handshake with mitmproxy)
@@ -24,6 +25,19 @@ class CrawlerSyncServer(threading.Thread):
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
         self.running = True
+
+
+    def log_progress(browser, phase, site, status, cmp_status, duration):
+        log_file = f"/app/data/heartbeat_{browser}.csv"
+        file_exists = os.path.isfile(log_file)
+        with open(log_file, "a", newline='') as f:
+         writer = csv.writer(f)
+         if not file_exists:
+            writer.writerow(["timestamp", "phase", "site", "status", "cmp_method", "duration_sec"])
+        writer.writerow([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                phase, site, status, cmp_status, round(duration, 2)
+        ])
 
     def run(self):
         print(f"[Sync Server] Listening for proxy handshakes on {self.host}:{self.port}")
@@ -53,11 +67,20 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
     
    # Standard Windows 10 Chrome User-Agent
     SPOOFED_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    
-    # Standard macOS Safari User-Agent (Fixes CNN for WebKit)
-    SAFARI_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
 
-    profile_dir = tempfile.mkdtemp()
+     # --- BRAVE STRICT PROFILE HANDLING ---
+    if browser_type == "brave" and is_hardened:
+        # Dynamically find the project root (one folder above the 'scripts' directory)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        profile_dir = os.path.join(project_root, "brave_strict_profile")
+        
+        if not os.path.exists(profile_dir):
+            print(f"    [!] WARNING: Brave Strict profile not found at {profile_dir}. Tracking protection may fail.")
+        else:
+            print(f"    [+] Loading Pre-Warmed Brave Strict Profile from: {profile_dir}")
+    else:
+        # All other browsers use a disposable temp profile
+        profile_dir = tempfile.mkdtemp()
 
     # ==========================================================
     # CERTIFICATE INJECTION (cert9.db)
@@ -66,16 +89,27 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
     cert_path = os.path.expanduser("~/.mitmproxy/mitmproxy-ca-cert.pem")
     if os.path.exists(cert_path):
         try:
-            # 1. Initialize an empty NSS database in the temporary profile
-            subprocess.check_call([
-                "certutil", "-d", f"sql:{profile_dir}", "-N", "--empty-password"
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # 1. Only initialize the database if it doesn't already exist.
+            # Running -N on an existing pre-warmed profile causes a password prompt hang.
+            if not os.path.exists(os.path.join(profile_dir, "cert9.db")):
+                subprocess.check_call([
+                    "certutil", "-d", f"sql:{profile_dir}", "-N", "--empty-password"
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            # 2. Inject the mitmproxy certificate as a trusted CA (Trust flags: TC,,)
+            # Create a temporary empty password file to auto-bypass any prompts
+            empty_pwd = tempfile.NamedTemporaryFile(delete=False)
+            empty_pwd.write(b"\n")
+            empty_pwd.close()
+            
+            # 2. Inject the mitmproxy certificate as a trusted CA
             subprocess.check_call([
                 "certutil", "-A", "-n", "mitmproxy", "-t", "TC,,", 
-                "-i", cert_path, "-d", f"sql:{profile_dir}"
+                "-i", cert_path, "-d", f"sql:{profile_dir}", "-f", empty_pwd.name
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Cleanup the temp file
+            os.unlink(empty_pwd.name)
+            
             print(f"    [+] Successfully injected mitmproxy cert into cert9.db")
         except FileNotFoundError:
             print("    [-] ERROR: 'certutil' not found! Run: sudo dnf install nss-tools")
@@ -92,7 +126,12 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
         "viewport": {"width": 1920, "height": 1080}
     }
     
-    # Only supply executable_path if we are using Brave
+    # Ensure Brave uses the correct system binary even if not explicitly passed
+    if browser_type == "brave" and not binary_path:
+        # Default Linux/Fedora installation path for Brave
+        binary_path = "/usr/bin/brave-browser"
+        print(f"    [!] No binary path provided for Brave. Defaulting to: {binary_path}")
+
     if binary_path:
         launch_kwargs["executable_path"] = binary_path
 
@@ -105,7 +144,9 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
                 "--disable-blink-features=AutomationControlled", 
                 "--test-type",
                 "--no-default-browser-check",
-                "--disable-search-engine-choice-screen"
+                "--disable-search-engine-choice-screen",
+                "--no-sandbox",
+                "--disable-dev-shm-usage"
             ]
         })
         context = p.chromium.launch_persistent_context(**launch_kwargs)
@@ -132,7 +173,8 @@ def create_browser_context(p, browser_type, binary_path, is_hardened):
         launch_kwargs.update({
             "ignore_https_errors": True,
             "user_agent": SPOOFED_UA,
-            "ignore_default_args": ["--enable-automation"]
+            "ignore_default_args": ["--enable-automation"],
+            "args": ["--disable-service-workers"]
         })
         context = p.webkit.launch_persistent_context(**launch_kwargs)
     else:
@@ -158,6 +200,17 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
 
     # Use ONE tab to prevent page.close() IPC deadlocks
     page = context.new_page()
+
+    # --- DEFENSE VERIFICATION CHECK ---
+    try:
+        if browser_type == "firefox":
+            tz = page.evaluate("Intl.DateTimeFormat().resolvedOptions().timeZone")
+            print(f"    [+] Defense Check: Firefox Timezone is '{tz}' (RFP forces UTC)")
+        elif browser_type == "brave":
+            is_brave = page.evaluate("(navigator.brave && navigator.brave.isBrave) ? true : false")
+            print(f"    [+] Defense Check: Browser is Brave = {is_brave}")
+    except: pass
+    # ----------------------------------
     
     try:
         page.route("**/*.{mp4,webm,ogg,mov,avi}", lambda route: route.abort())
@@ -370,104 +423,6 @@ def main():
         "https://www.theguardian.com",
         "https://www.independent.co.uk",
         "https://www.nytimes.com",
-        "https://www.washingtonpost.com",
-        "https://www.dailymotion.com",
-        "https://www.foxnews.com",
-        "https://www.indiatimes.com",
-        "https://www.nbcnews.com",
-        "https://www.usatoday.com",
-        "https://www.cbsnews.com",
-        "https://www.techcrunch.com",
-        "https://www.prnewswire.com",
-        "https://www.apnews.com",
-        "https://www.nypost.com",
-        "https://www.huffpost.com",
-        "https://www.huffingtonpost.com",
-        "https://www.sciencedaily.com",
-        "https://www.usnews.com",
-        "https://www.arstechnica.com",
-        "https://www.techtarget.com",
-        "https://www.euronews.com",
-        "https://www.medicalnewstoday.com",
-        "https://www.techradar.com",
-        "https://www.dailymail.com",
-        "https://www.abcnews.com",
-        "https://www.technologyreview.com",
-        "https://www.newscientist.com",
-        "https://www.today.com",
-        "https://www.irishtimes.com",
-        "https://www.newsbreak.com",
-        "https://www.thedailybeast.com",
-        "https://www.straitstimes.com",
-        "https://www.thetimes.com",
-        "https://www.economictimes.com",
-        "https://www.jpost.com",
-        "https://www.over-blog.com",
-        "https://www.news24.com",
-        "https://www.pcworld.com",
-        "https://www.gulfnews.com",
-        "https://www.computerworld.com",
-        "https://www.archdaily.com",
-        "https://www.business-standard.com",
-        "https://www.searchenginejournal.com",
-        "https://www.feednews.com",
-        "https://www.miamiherald.com",
-        "https://www.khaleejtimes.com",
-        "https://www.worldtimeserver.com",
-        "https://www.mercurynews.com",
-        "https://www.cnblogs.com",
-        "https://www.channelnewsasia.com",
-        "https://www.laravel-news.com",
-        "https://www.startribune.com",
-        "https://www.dallasnews.com",
-        "https://www.scitechdaily.com",
-        "https://www.techrepublic.com",
-        "https://www.chinatimes.com",
-        "https://www.smashingmagazine.com",
-        "https://www.denverpost.com",
-        "https://www.theepochtimes.com",
-        "https://www.suntimes.com",
-        "https://www.guinnessworldrecords.com",
-        "https://www.tribunnews.com",
-        "https://www.taboolanews.com",
-        "https://www.sfchronicle.com",
-        "https://www.sandiegouniontribune.com",
-        "https://www.thenationalnews.com",
-        "https://www.eadaily.com",
-        "https://www.gbnews.com",
-        "https://www.racingpost.com",
-        "https://www.buzzfeednews.com",
-        "https://www.infoworld.com",
-        "https://www.worldpopulationreview.com",
-        "https://www.journaldemontreal.com",
-        "https://www.dpreview.com",
-        "https://www.sportingnews.com",
-        "https://www.discovermagazine.com",
-        "https://www.newsmax.com",
-        "https://www.worldatlas.com",
-        "https://www.autoblog.com",
-        "https://www.statnews.com",
-        "https://www.post-gazette.com",
-        "https://www.newsday.com",
-        "https://www.macworld.com",
-        "https://www.deccanherald.com",
-        "https://www.nationalreview.com",
-        "https://www.dailygalaxy.com",
-        "https://www.indiandefencereview.com",
-        "https://www.lotterypost.com",
-        "https://www.bangkokpost.com",
-        "https://www.mensjournal.com",
-        "https://www.techopedia.com",
-        "https://www.canalblog.com",
-        "https://www.technorati.com",
-        "https://www.usmagazine.com",
-        "https://www.tvonenews.com",
-        "https://www.news-postseven.com",
-        "https://www.detroitnews.com",
-        "https://www.techspot.com",
-        "https://www.reviewjournal.com",
-        "https://www.smartnews.com",
-        "https://www.arabnews.com",
         ]
 
     sync_port = 50505
