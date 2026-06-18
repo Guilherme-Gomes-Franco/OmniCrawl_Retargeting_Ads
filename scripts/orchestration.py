@@ -12,6 +12,7 @@ import csv
 import os
 import re
 from datetime import datetime
+import shutil
 
 
 # Determine where we are: Docker uses /app, Local uses the script's parent folder
@@ -27,7 +28,7 @@ else:
 os.makedirs(DATA_DIR, exist_ok=True)
 print(f"[*] Environment Detected. Project Root: {PROJECT_ROOT} | Data Dir: {DATA_DIR}")
 
-def log_progress(browser, phase, site, status, cmp_status, duration):
+def log_progress(browser, phase, site, status, cmp_status, duration, proxy):
     log_file = os.path.join(DATA_DIR, f"heartbeat_{browser}.csv")
     try:
         file_exists = os.path.isfile(log_file)
@@ -85,18 +86,22 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
    # Standard Windows 10 Chrome User-Agent
     SPOOFED_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+    run_profile_dir = tempfile.mkdtemp()
+
      # --- BRAVE STRICT PROFILE HANDLING ---
     if browser_type == "brave" and is_hardened:
         # Dynamically find the project root (one folder above the 'scripts' directory)
-        profile_dir = os.path.join(PROJECT_ROOT, "brave_strict_profile")
+        template_dir = os.path.join(PROJECT_ROOT, "brave_strict_profile")
         
-        if not os.path.exists(profile_dir):
-            print(f"    [!] WARNING: Brave Strict profile not found at {profile_dir}. Tracking protection may fail.")
+        if os.path.exists(template_dir):
+            print(f"    [+] Cloning Brave Strict Template to: {run_profile_dir}")
+            # We copy only the contents, so the browser starts with pre-set Shields
+            # dirs_exist_ok=True is used to copy into the already created tempdir
+            shutil.copytree(template_dir, run_profile_dir, dirs_exist_ok=True)
         else:
-            print(f"    [+] Loading Pre-Warmed Brave Strict Profile from: {profile_dir}")
-    else:
+            print(f"    [!] WARNING: Brave Template not found. Starting clean.")
         # All other browsers use a disposable temp profile
-        profile_dir = tempfile.mkdtemp()
+        profile_dir = run_profile_dir
 
     # ==========================================================
     # CERTIFICATE INJECTION (cert9.db)
@@ -142,7 +147,7 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
         "viewport": {"width": 1920, "height": 1080}
     }
     
-    # Ensure Brave uses the correct system binary even if not explicitly passed
+    # Ensure Brave uses the correct system binary even if not explicitly passedfi
     if browser_type == "brave" and not binary_path:
         # Default Linux/Fedora installation path for Brave
         binary_path = "/usr/bin/brave-browser"
@@ -343,6 +348,7 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
                                     try: loc.click(timeout=1000, force=True, no_wait_after=True)
                                     except: loc.evaluate("node => node.click()")
                                     banner_clicked = True
+                                    cmp_result = "CSS Selector"
                                     break
                                     
                                 # 2. Try Text Regex (with Length Safety)
@@ -359,6 +365,7 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
                                                 try: candidate.click(timeout=1000, force=True, no_wait_after=True)
                                                 except: candidate.evaluate("node => node.click()")
                                                 banner_clicked = True
+                                                cmp_result = "Regex Match"
                                                 break
                             except: pass
                         if not banner_clicked:
@@ -459,11 +466,107 @@ def main():
     
     # Publisher sites: Ad-heavy sites where we measure the RTB auctions (CPMs)
     PUBLISHER_SITES =[
+        "https://www.youtube.com",
+        "https://www.fbcdn.net",
+        "https://www.bing.com",
+        "https://www.pinterest.com",
+        "https://www.x.com",
+        "https://www.vimeo.com",
+        "https://www.roblox.com",
+        "https://www.myfritz.net",
+        "https://www.opera.com",
+        "https://www.vk.com",
+        "https://www.b-cdn.net",
+        "https://www.nytimes.com",
+        "https://www.userapi.com",
+        "https://www.flickr.com",
+        "https://www.soundcloud.com",
+        "https://www.taboola.com",
+        "https://www.cnn.com",
+        "https://www.theguardian.com",
+        "https://www.forbes.com",
+        "https://www.bbc.com",
+        "https://www.researchgate.net",
+        "https://www.bbc.co.uk",
+        "https://www.sourceforge.net",
+        "https://www.roku.com",
+        "https://www.dropcatch.com",
+        "https://www.springer.com",
+        "https://www.tinyurl.com",
+        "https://www.reuters.com",
+        "https://www.alibaba.com",
+        "https://www.nature.com",
+        "https://www.smartadserver.com",
+        "https://www.crashlytics.com",
+        "https://www.tradingview.com",
+        "https://www.bloomberg.com",
+        "https://www.yandex.com",
+        "https://www.cloudns.net",
+        "https://www.wp.com",
+        "https://www.go.com",
+        "https://www.statista.com",
+        "https://www.speedtest.net",
+        "https://www.npr.org",
+        "https://www.mediatek.com",
+        "https://www.foxnews.com",
+        "https://www.indiatimes.com",
+        "https://www.slideshare.net",
+        "https://www.nbcnews.com",
+        "https://www.firefox.com",
+        "https://www.atlassian.net",
+        "https://www.palmplaystore.com",
+        "https://www.usatoday.com",
+        "https://www.capcut.com",
+        "https://www.t-mobile.com",
+        "https://www.deviantart.com",
+        "https://www.fast.com",
+        "https://www.icloud-content.com",
+        "https://www.threads.com",
+        "https://www.sagepub.com",
+        "https://www.elpais.com",
+        "https://www.cnet.com",
+        "https://www.cambridge.org",
+        "https://www.pinimg.com",
+        "https://www.dotomi.com",
+        "https://www.ted.com",
+        "https://www.dreamhost.com",
+        "https://www.wps.com",
+        "https://www.zillow.com",
+        "https://www.prnewswire.com",
+        "https://www.mlb.com",
+        "https://www.gumgum.com",
+        "https://www.apnews.com",
+        "https://www.hbr.org",
+        "https://www.rakuten.com",
+        "https://www.disneyplus.com",
+        "https://www.unpkg.com",
+        "https://www.disqus.com",
+        "https://www.me.com",
+        "https://www.ebay.co.uk",
+        "https://www.agoda.com",
+        "https://www.synology.com",
+        "https://www.healthline.com",
+        "https://www.richaudience.com",
+        "https://www.poki.com",
+        "https://www.nationalgeographic.com",
+        "https://www.ryanair.com",
+        "https://www.theatlantic.com",
+        "https://www.kwai.com",
+        "https://www.digitaloceanspaces.com",
+        "https://www.kueezrtb.com",
+        "https://www.utorrent.com",
+        "https://www.onesignal.com",
+        "https://www.faphouse.com",
+        "https://www.quizlet.com",
+        "https://www.huffpost.com",
+        "https://www.sofascore.com",
+        "https://www.moneycontrol.com",
+        "https://www.marca.com",
+        "https://www.xing.com",
         "https://www.cnn.com",
         "https://www.theguardian.com",
         "https://www.independent.co.uk",
-        "https://www.nytimes.com",
-        ]
+    ]
 
     sync_port = 50505
     sync_server = CrawlerSyncServer(port=sync_port)

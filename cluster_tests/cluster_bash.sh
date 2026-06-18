@@ -1,13 +1,6 @@
 #!/bin/bash
 
-# Configuration Matrix: [Browser] [Mode] [Hardened_Flag]
-# 1. Chrome (Baseline)
-# 2. WebKit (ITP Baseline)
-# 3. Brave Default
-# 4. Brave Shields (Strict)
-# 5. Firefox Default
-# 6. Firefox RFP (Hardened)
-
+# Configuration Matrix: [Browser] [Mode]
 declare -a experiments=(
     "chrome baseline"
     "webkit baseline"
@@ -17,9 +10,8 @@ declare -a experiments=(
     "firefox hardened"
 )
 
-# Divide 150 sites into batches of 30
-BATCH_SIZE=30
-TOTAL_SITES=150
+# Get the current directory path to pass to the worker nodes
+PROJECT_DIR=$(pwd)
 
 for exp in "${experiments[@]}"; do
     read -r BROWSER MODE <<< "$exp"
@@ -35,11 +27,22 @@ for exp in "${experiments[@]}"; do
     
     echo "[*] Submitting $JOB_NAME to OAR..."
     
-    # -t docker-swarm: Enables Docker
-    # -l nodes=1,walltime=15:00:00: Requests 1 node for 15 hours
-    # Pass environment variables to the OAR environment
+    # --- THE COMMAND STRING ---
+    # 1. Navigate to the project folder on the node
+    # 2. Build the image locally on the node
+    # 3. Launch the 2 workers defined in your docker-compose.yml
+    COMMAND="cd $PROJECT_DIR && docker build -t omnicrawl-worker . && BROWSER=$BROWSER HARDENED=$HARDENED docker-compose up --abort-on-container-exit"
+
+    # --- OAR SUBMISSION ---
     oarsub -t docker-swarm \
            -n "$JOB_NAME" \
-           -l nodes=1,walltime=15:00:00 \
-           "BROWSER=$BROWSER HARDENED=$HARDENED docker-compose up --abort-on-container-exit"
+           -p "host in ('squirtle-1', 'squirtle-2', 'squirtle-3', 'squirtle-4', 'charmander-3', 'charmander-4')"  \
+           -l nodes=1,walltime=10:00:00 \
+           "$COMMAND"
 done
+
+echo "----------------------------------------------------------"
+echo "All 6 experiments submitted! Total 12 workers starting."
+echo "Use 'oarstat -u $(whoami)' to monitor progress."
+echo "Check data/heartbeat_<browser>.csv for live site logs."
+echo "----------------------------------------------------------"

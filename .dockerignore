@@ -1,0 +1,11 @@
+# Do not send the browser profile to the Docker builder
+# (We mount this as a volume in compose, so we don't need it in the image)
+brave_strict_profile/
+
+# Do not send the data folder (it can be huge and slow down the build)
+data/
+
+# Ignore local python caches
+**/__pycache__/
+*.pyc
+.git/

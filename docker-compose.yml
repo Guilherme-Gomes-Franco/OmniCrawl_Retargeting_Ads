@@ -1,7 +1,9 @@
+version: '3.7'
 services:
   worker_1:
     build: .
-    shm_size: '2gb'
+    image: omnicrawl-worker
+    shm_size: '4gb'
     environment:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
@@ -10,12 +12,13 @@ services:
       - PROXY_PORT=38080
       - DISPLAY_NUM=99
     volumes:
-      - ./data:/app/data:Z
-      - ./brave_strict_profile:/app/brave_strict_profile:Z
+      - ./data:/app/data
+      - ./brave_strict_profile:/app/brave_strict_profile
 
   worker_2:
     build: .
-    shm_size: '2gb'
+    image: omnicrawl-worker
+    shm_size: '4gb'
     environment:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
@@ -24,5 +27,5 @@ services:
       - PROXY_PORT=38081
       - DISPLAY_NUM=100
     volumes:
-      - ./data:/app/data:Z
-      - ./brave_strict_profile:/app/brave_strict_profile:Z
+      - ./data:/app/data
+      - ./brave_strict_profile:/app/brave_strict_profile
