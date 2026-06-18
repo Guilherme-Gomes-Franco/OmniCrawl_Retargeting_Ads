@@ -36,7 +36,7 @@ cleanup() {
     # Move SQLite databases
     mv -f /tmp/${RUN_ID}* /app/data/ 2>/dev/null || true
     # Move heartbeat logs
-    mv -f /app/heartbeat_${BROWSER}.csv /app/data/ 2>/dev/null || true
+    mv -f /app/heartbeat_*.csv /app/data/ 2>/dev/null || true
     
     if [ -n "${PROXY_PID:-}" ]; then
         kill $PROXY_PID 2>/dev/null || true

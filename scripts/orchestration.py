@@ -28,8 +28,8 @@ else:
 os.makedirs(DATA_DIR, exist_ok=True)
 print(f"[*] Environment Detected. Project Root: {PROJECT_ROOT} | Data Dir: {DATA_DIR}")
 
-def log_progress(browser, phase, site, status, cmp_status, duration, proxy):
-    log_file = os.path.join(DATA_DIR, f"heartbeat_{browser}.csv")
+def log_progress(worker_id, phase, site, status, cmp_status, duration):
+    log_file = os.path.join(DATA_DIR, f"heartbeat_{worker_id}.csv")
     try:
         file_exists = os.path.isfile(log_file)
         with open(log_file, "a", newline='') as f:
@@ -220,7 +220,7 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
 # ==========================================================
 # 3. THE 3-PHASE CAUSAL INFERENCE WORKFLOW (Figure 4.2)
 # ==========================================================
-def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
+def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port, proxy_port):
     """Executes a single phase by driving the browser and commanding the proxy."""
     print(f"\n=== Starting {phase_name} ({browser_id}) ===")
 
@@ -404,8 +404,11 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port):
               # Calculate duration
             duration = time.perf_counter() - start_time
 
+            # UNIQUE WORKER ID: browser_port (e.g., chrome_38080)
+            worker_id = f"{browser_id}_{proxy_port}"
+
             #For debugging, print the status and duration
-            log_progress(browser_id, phase_name, site, status, cmp_result, duration)
+            log_progress(worker_id, phase_name, site, status, cmp_result, duration)
 
             # 5. Stop logging (Out-of-Band Python Request)
             try:
@@ -581,7 +584,7 @@ def main():
             
             print("\n=== [Phase 1A] Building High-Value Persona ===")
             # We visit seeder sites to drop 3rd-party cookies & fingerprints into the network
-            run_crawl_phase(context, "Phase1A_Training", args.browser, SEEDER_SITES, sync_port)
+            run_crawl_phase(context, "Phase1A_Training", args.browser, SEEDER_SITES, sync_port, args.proxy_port)
             
             print("\n=== [Phase 1B] Establishing Baseline CPM ===")
             # We visit the publishers NOW to record how much DSPs bid for our "Known" High-Value Persona
@@ -591,7 +594,7 @@ def main():
                 args.start_idx = 0
             current_publishers = PUBLISHER_SITES[args.start_idx:args.end_idx]
 
-            run_crawl_phase(context, "Phase1B_PreBreak", args.browser, current_publishers, sync_port)
+            run_crawl_phase(context, "Phase1B_PreBreak", args.browser, current_publishers, sync_port, args.proxy_port)
             
             # =========================================================
             # PHASE 2: The Identity Break
@@ -613,7 +616,7 @@ def main():
             
             print("\n=== [Phase 3] Measuring Defense Efficacy ===")
             # Revisit the exact same publishers. If CPMs are just as high as Phase 1B, tracking persisted!
-            run_crawl_phase(context, "Phase3_PostBreak", args.browser, current_publishers, sync_port)
+            run_crawl_phase(context, "Phase3_PostBreak", args.browser, current_publishers, sync_port, args.proxy_port)
             
             context.close()
 
