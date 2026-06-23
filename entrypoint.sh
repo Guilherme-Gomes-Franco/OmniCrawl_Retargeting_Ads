@@ -1,17 +1,23 @@
 #!/bin/bash
+# We keep set -e to catch errors, but we will "guard" the commands that might fail
 set -e
+set -u
 
 # Use variables from OAR/Docker-Compose environment
 BROWSER=${BROWSER:-chrome}
 HARDENED_FLAG=${HARDENED:-""}
-
-# NEW: Use variables from Docker Compose
 PROXY_PORT=${PROXY_PORT:-38080}
 DISPLAY_NUM=${DISPLAY_NUM:-99}
 
 # 1. Start the Virtual Display (Xvfb)
 export DISPLAY=:$DISPLAY_NUM
-Xvfb :$DISPLAY_NUM -screen 0 1920x1080x24 &
+echo "[*] Cleaning up old Xvfb locks for $DISPLAY..."
+# If a previous job crashed on this node, the lock file prevents Xvfb from starting.
+# We remove it to prevent the "Aborting" error.
+rm -f /tmp/.X${DISPLAY_NUM}-lock || true
+
+echo "[*] Starting Xvfb..."
+Xvfb :$DISPLAY_NUM -screen 0 1920x1080x24 -ac +extension RANDR &
 sleep 2
 
 # 2. Define Binary Paths (Only override for Brave)
@@ -30,40 +36,51 @@ echo "[*] Container initialized. Run ID: $RUN_ID"
 echo "[*] Configuration: Browser=$BROWSER, Hardened=$HARDENED_FLAG"
 
 # DATA MIGRATION TRAP
-# This function runs even if Python crashes or OAR kills the job
 cleanup() {
-    echo "[*] Signal received or script ending. Migrating data to NFS..."
-    # Move SQLite databases
+    # Stop other workers from triggering cleanup if we are already cleaning up
+    trap - EXIT 
+    echo "[*] Cleanup triggered. Migrating data to NFS..."
     mv -f /tmp/${RUN_ID}* /app/data/ 2>/dev/null || true
-    # Move heartbeat logs
     mv -f /app/heartbeat_*.csv /app/data/ 2>/dev/null || true
-    
-    if [ -n "${PROXY_PID:-}" ]; then
-        kill $PROXY_PID 2>/dev/null || true
-    fi
-    echo "[*] Cleanup complete. Exiting."
+    [ -n "${PROXY_PID:-}" ] && kill $PROXY_PID 2>/dev/null || true
+    exit
 }
-# Catch SIGTERM (Cluster timeout), SIGINT (Ctrl+C), and ERR (Python crash)
-trap cleanup EXIT SIGTERM SIGINT ERR
+trap cleanup EXIT SIGTERM ERR
 
-
+# 4. Certificates and NSS setup
 echo "[*] Generating proxy certificates..."
-mitmdump > /dev/null 2>&1 &
-MITM_PID=$!
-sleep 3
-kill $MITM_PID
-sleep 1
+mkdir -p /root/.mitmproxy
 
-echo "[*] Installing mitmproxy certificate to Ubuntu OS..."
-cp /root/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca-cert.crt
-update-ca-certificates
+# Run mitmdump just long enough to generate files, then stop
+# We use a different port (38999) just for the generator
+timeout 5 mitmdump --listen-port 38999 > /dev/null 2>&1 || true
 
-echo "[*] Installing mitmproxy certificate to Chromium NSS DB..."
-mkdir -p $HOME/.pki/nssdb
-certutil -d sql:$HOME/.pki/nssdb -N --empty-password
-certutil -A -n "mitmproxy" -t "TC,," -i /root/.mitmproxy/mitmproxy-ca-cert.pem -d sql:$HOME/.pki/nssdb
+# Check if the cert was created
+if [ ! -f "/root/.mitmproxy/mitmproxy-ca-cert.pem" ]; then
+    echo "[!] Cert not found, trying one more time..."
+    mitmdump --version > /dev/null 2>&1 || true
+fi
 
-# Start the proxy
+if [ -f "/root/.mitmproxy/mitmproxy-ca-cert.pem" ]; then
+    echo "[+] Cert found! Installing to OS..."
+    cp /root/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca-cert.crt
+    update-ca-certificates
+else
+    echo "[!] FATAL ERROR: mitmproxy failed to generate certificates."
+    ls -la /root/
+    exit 1
+fi
+
+echo "[*] Installing to Chromium NSS DB..."
+mkdir -p /root/.pki/nssdb
+echo "" > /tmp/nss_pwd.txt
+certutil -d sql:/root/.pki/nssdb -N -f /tmp/nss_pwd.txt || true
+certutil -A -n "mitmproxy" -t "TC,," -i /root/.mitmproxy/mitmproxy-ca-cert.pem -d sql:/root/.pki/nssdb -f /tmp/nss_pwd.txt || true
+
+# 5. Start the proxy
+echo "[*] Starting mitmproxy on port $PROXY_PORT..."
+# removed > /dev/null so that if mitmproxy fails, 
+# I will see the error in the OAR log
 PYTHONPATH=./scripts mitmdump -s "proxy/injector.py" \
   --set block_global=false \
   --set js_filepath="scripts/stealth.js" \
@@ -73,15 +90,16 @@ PYTHONPATH=./scripts mitmdump -s "proxy/injector.py" \
   --listen-host 127.0.0.1 \
   --listen-port $PROXY_PORT \
   --anticache \
-  --no-http2 > /dev/null 2>&1 &
+  --no-http2 &
 PROXY_PID=$!
 
 sleep 5 # Wait for proxy to bind
 
-# 5. Run the Causal Orchestrator
+# 6. Run the Causal Orchestrator
 echo "[*] Launching Causal Orchestrator..."
+# We add -u to python3 to make sure logs appear in the cluster console immediately
 if [ -n "$BIN_PATH" ]; then
-    python3 scripts/orchestration.py \
+    python3 -u scripts/orchestration.py \
     --browser "$BROWSER" \
     --binary "$BIN_PATH" \
     $HARDENED_FLAG \
@@ -89,7 +107,7 @@ if [ -n "$BIN_PATH" ]; then
     --start-idx "${START_IDX:-0}" \
     --end-idx "${END_IDX:-150}"
 else
-    python3 scripts/orchestration.py \
+    python3 -u scripts/orchestration.py \
     --browser "$BROWSER" \
     $HARDENED_FLAG \
     --proxy-port "$PROXY_PORT" \
@@ -97,11 +115,5 @@ else
     --end-idx "${END_IDX:-150}"
 fi
 
-# 6. SHUTDOWN & DATA MIGRATION
-echo "[*] Moving database from local container storage to NFS..."
-mv "$LOG_DB" /app/data/
-mv "$DUMP_DB" /app/data/
-
-echo "[*] Crawl finished. Shutting down."
-kill $PROXY_PID
+# The cleanup trap handles the 'mv' and 'kill' automatically
 exit 0

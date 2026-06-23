@@ -95,13 +95,25 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
         
         if os.path.exists(template_dir):
             print(f"    [+] Cloning Brave Strict Template to: {run_profile_dir}")
+
+            # --- FIX: IGNORE BROWSER LOCK FILES ---
+            # We ignore files that cause shutil to crash (locks, sockets, etc.)
+            ignore_func = shutil.ignore_patterns(
+                'SingletonLock', 'SingletonSocket', 'SingletonCookie', 
+                'parent.lock', 'lock', '.parentlock', 'BrowserMetrics*', 'Crashpad'
+            )
             # We copy only the contents, so the browser starts with pre-set Shields
             # dirs_exist_ok=True is used to copy into the already created tempdir
-            shutil.copytree(template_dir, run_profile_dir, dirs_exist_ok=True)
+            shutil.copytree(template_dir, run_profile_dir, dirs_exist_ok=True, ignore=ignore_func)
+
+            for cert_file in ["cert9.db", "key4.db", "pkcs11.txt"]:
+                target = os.path.join(run_profile_dir, cert_file)
+            if os.path.exists(target):
+                os.remove(target)
         else:
             print(f"    [!] WARNING: Brave Template not found. Starting clean.")
-        # All other browsers use a disposable temp profile
-        profile_dir = run_profile_dir
+    # All other browsers use a disposable temp profile
+    profile_dir = run_profile_dir
 
     # ==========================================================
     # CERTIFICATE INJECTION (cert9.db)
@@ -200,7 +212,6 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
             "ignore_https_errors": True,
             "user_agent": SPOOFED_UA,
             "ignore_default_args": ["--enable-automation"],
-            "args": ["--disable-service-workers"]
         })
         context = p.webkit.launch_persistent_context(**launch_kwargs)
     else:
@@ -236,6 +247,14 @@ def run_crawl_phase(context, phase_name, browser_id, target_sites, sync_port, pr
 
     # Global timeout for any single playwright action (30s)
     page.set_default_timeout(30000)
+
+    # Safe way to "disable" Service Workers for all browsers including WebKit
+    try:
+        # We abort any request to register a service worker
+        page.route("**/sw.js", lambda route: route.abort())
+        page.route("**/service-worker.js", lambda route: route.abort())
+    except:
+        pass
     
     try:
         page.route("**/*.{mp4,webm,ogg,mov,avi}", lambda route: route.abort())

@@ -18,7 +18,7 @@ RUN curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg https://br
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir mitmproxy beautifulsoup4 playwright
+RUN pip install --no-cache-dir mitmproxy beautifulsoup4 playwright attrs setuptools cryptography
 
 # Copy your entire project into the container
 COPY . /app/
