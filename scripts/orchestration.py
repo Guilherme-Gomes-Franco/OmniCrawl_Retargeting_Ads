@@ -456,6 +456,10 @@ def main():
     parser.add_argument("--proxy-port", type=int, default=38080)
     args = parser.parse_args()
 
+    mode_str = "hardened" if args.hardened else "baseline"
+    # Example: brave_hardened or firefox_baseline
+    browser_label = f"{args.browser}_{mode_str}" 
+
     # Define your domains for the Causal Workflow
     # ==========================================================
     # SEEDER SITES: Building the "Affluent Consumer" Persona
@@ -603,7 +607,7 @@ def main():
             
             print("\n=== [Phase 1A] Building High-Value Persona ===")
             # We visit seeder sites to drop 3rd-party cookies & fingerprints into the network
-            run_crawl_phase(context, "Phase1A_Training", args.browser, SEEDER_SITES, sync_port, args.proxy_port)
+            run_crawl_phase(context, "Phase1A_Training", browser_label, SEEDER_SITES, sync_port, args.proxy_port)
             
             print("\n=== [Phase 1B] Establishing Baseline CPM ===")
             # We visit the publishers NOW to record how much DSPs bid for our "Known" High-Value Persona
@@ -613,7 +617,7 @@ def main():
                 args.start_idx = 0
             current_publishers = PUBLISHER_SITES[args.start_idx:args.end_idx]
 
-            run_crawl_phase(context, "Phase1B_PreBreak", args.browser, current_publishers, sync_port, args.proxy_port)
+            run_crawl_phase(context, "Phase1B_PreBreak", browser_label, current_publishers, sync_port, args.proxy_port)
             
             # =========================================================
             # PHASE 2: The Identity Break
@@ -635,7 +639,7 @@ def main():
             
             print("\n=== [Phase 3] Measuring Defense Efficacy ===")
             # Revisit the exact same publishers. If CPMs are just as high as Phase 1B, tracking persisted!
-            run_crawl_phase(context, "Phase3_PostBreak", args.browser, current_publishers, sync_port, args.proxy_port)
+            run_crawl_phase(context, "Phase3_PostBreak", browser_label, current_publishers, sync_port, args.proxy_port)
             
             context.close()
 

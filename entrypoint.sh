@@ -9,6 +9,12 @@ HARDENED_FLAG=${HARDENED:-""}
 PROXY_PORT=${PROXY_PORT:-38080}
 DISPLAY_NUM=${DISPLAY_NUM:-99}
 
+if [ "$HARDENED_FLAG" == "--hardened" ]; then
+    MODE_LABEL="hardened"
+else
+    MODE_LABEL="baseline"
+fi
+
 # 1. Start the Virtual Display (Xvfb)
 export DISPLAY=:$DISPLAY_NUM
 echo "[*] Cleaning up old Xvfb locks for $DISPLAY..."
@@ -28,7 +34,8 @@ else
 fi
 
 # 3. Create a unique identifier
-RUN_ID="${BROWSER}_${PROXY_PORT}_$(date +%s)_$RANDOM"
+RUN_ID="${BROWSER}_${MODE_LABEL}_${PROXY_PORT}_$(date +%s)"
+
 LOG_DB="/tmp/${RUN_ID}.log.sqlite3"
 DUMP_DB="/tmp/${RUN_ID}.dump.sqlite3"
 

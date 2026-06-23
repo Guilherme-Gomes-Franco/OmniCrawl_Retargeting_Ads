@@ -26,7 +26,7 @@ for exp in "${experiments[@]}"; do
     # This is much cleaner and won't crash the OAR parser
     oarsub -t docker-swarm \
            -n "$JOB_NAME" \
-           -p "host in ('psyduck-1', 'psyduck-2', 'squirtle-3', 'squirtle-4', 'charmander-3', 'charmander-4')"  \
+           -p "host in ('psyduck-1', 'squirtle-3', 'squirtle-4', 'charmander-3', 'charmander-4','charmander-5')"  \
            -l nodes=1,walltime=10:00:00 \
            "./job_wrapper.sh $BROWSER $FLAG"
 done
