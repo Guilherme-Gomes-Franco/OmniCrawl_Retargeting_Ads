@@ -1,0 +1,26 @@
+2026/06/12-16:11:05.373 3b5bb Reusing MANIFEST /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/IndexedDB/https_www.remax.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/06/12-16:11:05.373 3b5bb Recovering log #4
+2026/06/12-16:11:05.373 3b5bb Reusing old log /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/IndexedDB/https_www.remax.com_0.indexeddb.leveldb/000004.log 
+2026/06/12-16:11:06.266 3b5bb Level-0 table #8: started
+2026/06/12-16:11:06.269 3b5bb Level-0 table #8: 1043 bytes OK
+2026/06/12-16:11:06.275 3b5bb Delete type=0 #4
+2026/06/12-16:11:06.276 3b5bb Manual compaction at level-0 from '\x00\x02\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x03\x00\x00\x00' @ 0 : 0; will stop at (end)
+2026/06/12-16:11:48.653 3b5bd Level-0 table #10: started
+2026/06/12-16:11:48.656 3b5bd Level-0 table #10: 814 bytes OK
+2026/06/12-16:11:48.663 3b5bd Delete type=0 #7
+2026/06/12-16:11:48.663 3b5bd Manual compaction at level-0 from (begin) .. (end); will stop at '\x00\x03\x00\x00\xc8\x06\x00v\x00i\x00s\x00i\x00t\x00s' @ 148 : 1
+2026/06/12-16:11:48.663 3b5bd Compacting 1@0 + 1@1 files
+2026/06/12-16:11:48.666 3b5bd Generated table #11@0: 45 keys, 732 bytes
+2026/06/12-16:11:48.666 3b5bd Compacted 1@0 + 1@1 files => 732 bytes
+2026/06/12-16:11:48.672 3b5bd compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/06/12-16:11:48.672 3b5bd Delete type=2 #8
+2026/06/12-16:11:48.673 3b5bd Delete type=2 #10
+2026/06/12-16:11:48.673 3b5bd Manual compaction at level-0 from '\x00\x03\x00\x00\xc8\x06\x00v\x00i\x00s\x00i\x00t\x00s' @ 148 : 1 .. (end); will stop at (end)
+2026/06/12-16:11:48.673 3b5bd Manual compaction at level-1 from (begin) .. (end); will stop at '\x00\x03\x00\x00\xc8\x06\x00v\x00i\x00s\x00i\x00t\x00s' @ 148 : 1
+2026/06/12-16:11:48.673 3b5bd Compacting 1@1 + 1@2 files
+2026/06/12-16:11:48.676 3b5bd Generated table #12@1: 18 keys, 496 bytes
+2026/06/12-16:11:48.676 3b5bd Compacted 1@1 + 1@2 files => 496 bytes
+2026/06/12-16:11:48.682 3b5bd compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/06/12-16:11:48.682 3b5bd Delete type=2 #5
+2026/06/12-16:11:48.682 3b5bd Delete type=2 #11
+2026/06/12-16:11:48.683 3b5bd Manual compaction at level-1 from '\x00\x03\x00\x00\xc8\x06\x00v\x00i\x00s\x00i\x00t\x00s' @ 148 : 1 .. (end); will stop at (end)

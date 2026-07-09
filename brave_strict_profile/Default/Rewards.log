@@ -1,0 +1,15 @@
+--------------------------------------------------------------------------------
+[Jun 12, 2026 2:27:41.8 PM GMT:ERROR:creative_new_tab_page_ads_util.cc(153)] Successfully saved creative new tab page ads
+[Jun 12, 2026 2:27:41.8 PM GMT:ERROR:creative_new_tab_page_ads_util.cc(138)] Successfully saved creative set conversions
+--------------------------------------------------------------------------------
+[Jun 12, 2026 2:40:16.5 PM GMT:ERROR:database_manager.cc(207)] Database downgrade not supported from schema version 57 to schema version 55
+[Jun 12, 2026 2:40:16.5 PM GMT:ERROR:ads_impl.cc(355)] Failed to create or open database
+[Jun 12, 2026 2:40:16.5 PM GMT:ERROR:ads_impl.cc(380)] Failed to initialize ads
+--------------------------------------------------------------------------------
+[Jun 12, 2026 2:54:43.4 PM GMT:ERROR:database_manager.cc(207)] Database downgrade not supported from schema version 57 to schema version 55
+[Jun 12, 2026 2:54:43.4 PM GMT:ERROR:ads_impl.cc(355)] Failed to create or open database
+[Jun 12, 2026 2:54:43.4 PM GMT:ERROR:ads_impl.cc(380)] Failed to initialize ads
+--------------------------------------------------------------------------------
+[Jun 12, 2026 3:19:53.9 PM GMT:ERROR:database_manager.cc(207)] Database downgrade not supported from schema version 57 to schema version 55
+[Jun 12, 2026 3:19:53.9 PM GMT:ERROR:ads_impl.cc(355)] Failed to create or open database
+[Jun 12, 2026 3:19:53.9 PM GMT:ERROR:ads_impl.cc(380)] Failed to initialize ads

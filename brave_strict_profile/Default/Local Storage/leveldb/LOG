@@ -1,0 +1,9 @@
+2026/06/17-16:23:40.394 1661e Reusing MANIFEST /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/06/17-16:23:40.401 1661e Recovering log #46
+2026/06/17-16:23:40.402 1661e Reusing old log /home/gfranco/Desktop/OmniCrawl_Retargeting_Ads/brave_strict_profile/Default/Local Storage/leveldb/000046.log 
+2026/06/17-16:23:48.146 16620 Level-0 table #50: started
+2026/06/17-16:23:48.151 16620 Level-0 table #50: 18476 bytes OK
+2026/06/17-16:23:48.158 16620 Delete type=0 #46
+2026/06/17-16:23:53.989 16620 Level-0 table #52: started
+2026/06/17-16:23:54.003 16620 Level-0 table #52: 88799 bytes OK
+2026/06/17-16:23:54.012 16620 Delete type=0 #49
