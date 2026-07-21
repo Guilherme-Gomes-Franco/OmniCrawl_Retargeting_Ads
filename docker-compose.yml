@@ -8,7 +8,7 @@ services:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
       - START_IDX=0
-      - END_IDX=50
+      - END_IDX=49
       - PROXY_PORT=38080
       - DISPLAY_NUM=99
     volumes:
@@ -26,6 +26,21 @@ services:
       - END_IDX=100
       - PROXY_PORT=38081
       - DISPLAY_NUM=100
+    volumes:
+      - ./data:/app/data
+      - ./brave_strict_profile:/app/brave_strict_profile
+
+  worker_3:
+    build: .
+    image: omnicrawl-worker
+    shm_size: '4gb'
+    environment:
+      - BROWSER=${BROWSER}
+      - HARDENED=${HARDENED}
+      - START_IDX=101
+      - END_IDX=149
+      - PROXY_PORT=38082
+      - DISPLAY_NUM=101
     volumes:
       - ./data:/app/data
       - ./brave_strict_profile:/app/brave_strict_profile

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.60.0-jammy 
+FROM mcr.microsoft.com/playwright/python:v1.61.0-jammy 
 
 # Set the working directory
 WORKDIR /app
@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     libnss3-tools \
     curl \
     gnupg \
+    dbus-x11 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Brave Browser Native Binary

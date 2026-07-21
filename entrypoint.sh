@@ -3,6 +3,10 @@
 set -e
 set -u
 
+# Unset any variables inherited from the Cluster host that confuse Brave
+unset DBUS_SESSION_BUS_ADDRESS
+unset DBUS_SESSION_BUS_PID
+
 # Use variables from OAR/Docker-Compose environment
 BROWSER=${BROWSER:-chrome}
 HARDENED_FLAG=${HARDENED:-""}
@@ -102,11 +106,16 @@ PROXY_PID=$!
 
 sleep 5 # Wait for proxy to bind
 
-# 6. Run the Causal Orchestrator
-echo "[*] Launching Causal Orchestrator..."
-# We add -u to python3 to make sure logs appear in the cluster console immediately
+# Generate a unique Machine ID for this container instance
+mkdir -p /var/lib/dbus
+dbus-uuidgen > /var/lib/dbus/machine-id
+
+# 6. Run the Causal Orchestrator wrapped in a DBUS session
+echo "[*] Launching Causal Orchestrator via DBUS Session..."
+
+# We use dbus-run-session to provide a valid 'colon-containing' address
 if [ -n "$BIN_PATH" ]; then
-    python3 -u scripts/orchestration.py \
+    dbus-run-session -- python3 -u scripts/orchestration.py \
     --browser "$BROWSER" \
     --binary "$BIN_PATH" \
     $HARDENED_FLAG \
@@ -114,7 +123,7 @@ if [ -n "$BIN_PATH" ]; then
     --start-idx "${START_IDX:-0}" \
     --end-idx "${END_IDX:-150}"
 else
-    python3 -u scripts/orchestration.py \
+    dbus-run-session -- python3 -u scripts/orchestration.py \
     --browser "$BROWSER" \
     $HARDENED_FLAG \
     --proxy-port "$PROXY_PORT" \
