@@ -7,6 +7,13 @@ set -u
 unset DBUS_SESSION_BUS_ADDRESS
 unset DBUS_SESSION_BUS_PID
 
+# Force the software rasterizer for Mesa (GPU bypass)
+export LIBGL_ALWAYS_SOFTWARE=1
+export MESA_LOADER_DRIVER_OVERRIDE=swrast
+
+# Explicitly tell Chromium NOT to use D-Bus for anything
+export CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox
+
 # Use variables from OAR/Docker-Compose environment
 BROWSER=${BROWSER:-chrome}
 HARDENED_FLAG=${HARDENED:-""}
@@ -32,7 +39,8 @@ sleep 2
 
 # 2. Define Binary Paths (Only override for Brave)
 if [ "$BROWSER" == "brave" ]; then
-    BIN_PATH="/usr/bin/brave-browser"
+    BIN_PATH="/usr/lib/brave-browser/brave"
+    echo "[*] Brave detected. Using direct binary: $BIN_PATH"
 else
     BIN_PATH=""
 fi

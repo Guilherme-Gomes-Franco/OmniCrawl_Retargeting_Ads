@@ -192,7 +192,8 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
                 "--disable-gpu",                # Prevents 3D acceleration crashes
                 "--no-zygote",                 # Disables the internal process manager
                 "--disable-setuid-sandbox",     # Extra layer of sandbox disabling
-                "--disable-software-rasterizer", # Forces clean 2D rendering
+                "--disable-software-rasterizer", # Forces clean 2D rendering         
+                "--disable-breakpad"
             ]
         })
         context = p.chromium.launch_persistent_context(**launch_kwargs)

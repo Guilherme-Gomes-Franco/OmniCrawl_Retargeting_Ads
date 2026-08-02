@@ -1,7 +1,11 @@
 #!/bin/bash
 
 declare -a experiments=(
-    "brave baseline"
+    "brave baseline" ,
+    "brave hardened" ,
+    "firefox baseline" ,
+    "firefox hardened" ,
+    "chrome baseline"
 )
 
 for exp in "${experiments[@]}"; do
@@ -21,7 +25,7 @@ for exp in "${experiments[@]}"; do
     # This is much cleaner and won't crash the OAR parser
     oarsub -t docker-swarm \
            -n "$JOB_NAME" \
-           -p "host in ('squirtle-3')"  \
+           -p "host in ('squirtle-1','squirtle-3', 'bulbasaur-4')"  \
            -l nodes=1,walltime=10:00:00 \
            "./job_wrapper.sh $BROWSER $FLAG"
 done
