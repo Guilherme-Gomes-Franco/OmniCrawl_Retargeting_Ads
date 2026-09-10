@@ -1,24 +1,28 @@
 #!/bin/bash
-# We keep set -e to catch errors, but we will "guard" the commands that might fail
-set -e
+# HPC-Hardened Entrypoint for ETR Measurement
 set -u
 
-# Unset any variables inherited from the Cluster host that confuse Brave
+# --- 1. SYSTEM VIRTUALIZATION & SANITIZATION ---
 unset DBUS_SESSION_BUS_ADDRESS
 unset DBUS_SESSION_BUS_PID
-
-# Force the software rasterizer for Mesa (GPU bypass)
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/dev/null"
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_LOADER_DRIVER_OVERRIDE=swrast
 
-# Explicitly tell Chromium NOT to use D-Bus for anything
-export CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox
+# Machine ID is required for v1.61.0 stability
+mkdir -p /var/lib/dbus
+dbus-uuidgen > /var/lib/dbus/machine-id
+# Overwrite the system machine-id file (if writable)
+cat /var/lib/dbus/machine-id > /etc/machine-id 2>/dev/null || true
 
 # Use variables from OAR/Docker-Compose environment
 BROWSER=${BROWSER:-chrome}
 HARDENED_FLAG=${HARDENED:-""}
 PROXY_PORT=${PROXY_PORT:-38080}
 DISPLAY_NUM=${DISPLAY_NUM:-99}
+START_IDX=${START_IDX:-0}
+END_IDX=${END_IDX:-150}
 
 if [ "$HARDENED_FLAG" == "--hardened" ]; then
     MODE_LABEL="hardened"
@@ -39,8 +43,13 @@ sleep 2
 
 # 2. Define Binary Paths (Only override for Brave)
 if [ "$BROWSER" == "brave" ]; then
-    BIN_PATH="/usr/lib/brave-browser/brave"
-    echo "[*] Brave detected. Using direct binary: $BIN_PATH"
+    if [ -f "/usr/lib/brave-browser/brave" ]; then
+        BIN_PATH="/usr/lib/brave-browser/brave"
+    elif [ -f "/opt/brave.com/brave/brave" ]; then
+        BIN_PATH="/opt/brave.com/brave/brave"
+    else
+        BIN_PATH="/usr/bin/brave-browser"
+    fi
 else
     BIN_PATH=""
 fi
@@ -60,7 +69,7 @@ cleanup() {
     trap - EXIT 
     echo "[*] Cleanup triggered. Migrating data to NFS..."
     mv -f /tmp/${RUN_ID}* /app/data/ 2>/dev/null || true
-    mv -f /app/heartbeat_*.csv /app/data/ 2>/dev/null || true
+    mv -f /app/heartbeat_${BROWSER}_${MODE_LABEL}_${PROXY_PORT}.csv /app/data/ 2>/dev/null || true
     [ -n "${PROXY_PID:-}" ] && kill $PROXY_PID 2>/dev/null || true
     exit
 }
@@ -114,30 +123,15 @@ PROXY_PID=$!
 
 sleep 5 # Wait for proxy to bind
 
-# Generate a unique Machine ID for this container instance
-mkdir -p /var/lib/dbus
-dbus-uuidgen > /var/lib/dbus/machine-id
-
-# 6. Run the Causal Orchestrator wrapped in a DBUS session
-echo "[*] Launching Causal Orchestrator via DBUS Session..."
-
-# We use dbus-run-session to provide a valid 'colon-containing' address
-if [ -n "$BIN_PATH" ]; then
-    dbus-run-session -- python3 -u scripts/orchestration.py \
+# 6. Run the Causal Orchestrator
+echo "[*] Launching Causal Orchestrator"
+python3 -u scripts/orchestration.py \
     --browser "$BROWSER" \
     --binary "$BIN_PATH" \
     $HARDENED_FLAG \
-    --proxy-port "$PROXY_PORT" \
-    --start-idx "${START_IDX:-0}" \
-    --end-idx "${END_IDX:-150}"
-else
-    dbus-run-session -- python3 -u scripts/orchestration.py \
-    --browser "$BROWSER" \
-    $HARDENED_FLAG \
-    --proxy-port "$PROXY_PORT" \
-    --start-idx "${START_IDX:-0}" \
-    --end-idx "${END_IDX:-150}"
-fi
+    --start-idx "$START_IDX" \
+    --end-idx "$END_IDX" \
+    --proxy-port "$PROXY_PORT" 
 
 # The cleanup trap handles the 'mv' and 'kill' automatically
 exit 0

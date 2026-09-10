@@ -159,14 +159,15 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
         "viewport": {"width": 1920, "height": 1080}
     }
     
-    # Ensure Brave uses the correct system binary even if not explicitly passedfi
+    # 1. If no binary_path was provided, only then search for it
     if browser_type == "brave" and not binary_path:
-        # Default Linux/Fedora installation path for Brave
-        binary_path = "/usr/bin/brave-browser"
-        print(f"    [!] No binary path provided for Brave. Defaulting to: {binary_path}")
+        binary_path= "/usr/lib/brave-browser/brave"
 
-    if binary_path:
-        launch_kwargs["executable_path"] = binary_path
+    # 2. Use the binary_path passed from entrypoint.sh if it exists
+        if binary_path and os.path.exists(binary_path):
+            print(f"    [+] Using provided binary path: {binary_path}")
+            launch_kwargs["executable_path"] = binary_path
+    
 
     if browser_type in ["chrome", "brave"]:
         launch_kwargs.update({
@@ -186,14 +187,10 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
                 "--disable-brave-update",        # Stop Brave update checks
                 "--restore-last-session=false",  # Force clean start
                   # --- NEW STABILITY FLAGS ---
-                "--disable-namespace-sandbox",
                 "--password-store=basic",       # <--- Prevents Keyring crash
                 "--use-mock-keychain",          # <--- Prevents Keyring crash
                 "--disable-gpu",                # Prevents 3D acceleration crashes
                 "--no-zygote",                 # Disables the internal process manager
-                "--disable-setuid-sandbox",     # Extra layer of sandbox disabling
-                "--disable-software-rasterizer", # Forces clean 2D rendering         
-                "--disable-breakpad"
             ]
         })
         context = p.chromium.launch_persistent_context(**launch_kwargs)

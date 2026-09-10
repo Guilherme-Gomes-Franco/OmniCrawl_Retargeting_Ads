@@ -8,7 +8,7 @@ services:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
       - START_IDX=0
-      - END_IDX=49
+      - END_IDX=50
       - PROXY_PORT=38080
       - DISPLAY_NUM=99
     volumes:
@@ -37,8 +37,8 @@ services:
     environment:
       - BROWSER=${BROWSER}
       - HARDENED=${HARDENED}
-      - START_IDX=101
-      - END_IDX=149
+      - START_IDX=100
+      - END_IDX=150
       - PROXY_PORT=38082
       - DISPLAY_NUM=101
     volumes:

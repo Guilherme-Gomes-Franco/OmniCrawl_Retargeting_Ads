@@ -34,4 +34,4 @@ docker build -t omnicrawl-worker .
 # 4. Launch the workers via Compose
 # We use the environment variables we exported above
 echo "[*] Launching Docker Compose..."
-docker compose up --abort-on-container-exit
+docker compose up
