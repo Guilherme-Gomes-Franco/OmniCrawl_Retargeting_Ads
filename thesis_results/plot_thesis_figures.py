@@ -58,7 +58,7 @@ etr_score = df["ETR Metric Score"].astype(float).values
 labels = [
     "Chrome\nBaseline",
     "Firefox\nBaseline",
-    "Firefox\nRFP",
+    "Firefox\nHardened",
     "Brave\nBaseline",
     "Brave\nStrict"
 ]
@@ -135,7 +135,7 @@ print("  [+] Saved Figure 2 (Median CPM Delta)")
 fig, ax = plt.subplots(figsize=(8.2, 5.2))
 point_colors = ["#d62728", "#7f7f7f", "#1f77b4", "#17becf", "#2ca02c"]
 
-for i, txt in enumerate(["Chrome Base", "FF Base", "FF Hardened (RFP)", "Brave Base", "Brave Strict"]):
+for i, txt in enumerate(["Chrome Base", "FF Base", "FF Hardened", "Brave Base", "Brave Strict"]):
     ax.scatter(u_cost[i], high_res[i], s=220, color=point_colors[i], 
                edgecolors="black", linewidth=1.5, zorder=5)
     
@@ -150,7 +150,7 @@ for i, txt in enumerate(["Chrome Base", "FF Base", "FF Hardened (RFP)", "Brave B
                 textcoords="offset points", xytext=xy_offsets[i], 
                 fontweight="bold", fontsize=10)
 
-# Connect the Pareto-optimal frontier points (FF RFP -> Brave Strict)
+# Connect the Pareto-optimal frontier points (FF Hardened -> Brave Strict)
 ax.plot([u_cost[2], u_cost[4]], [high_res[2], high_res[4]], 
         color="purple", linestyle="--", linewidth=1.8, label="Pareto Frontier", zorder=3)
 

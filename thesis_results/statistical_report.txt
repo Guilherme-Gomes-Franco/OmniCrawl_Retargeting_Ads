@@ -1,0 +1,7 @@
+chrome_baseline      | Wilcoxon W =    226.5 | p = 0.4832     | Sig: n.s.
+firefox_baseline     | Wilcoxon W =    414.0 | p = 0.3445     | Sig: n.s.
+firefox_hardened     | Wilcoxon W =    472.0 | p = 0.0734     | Sig: n.s.
+brave_baseline       | Wilcoxon W =    345.0 | p = 0.5300     | Sig: n.s.
+brave_hardened       | Wilcoxon W =    361.5 | p = 0.1192     | Sig: n.s.
+
+Kruskal-Wallis Test (Across Browser Delta Distributions): H = 7.570, p = 1.0868e-01
