@@ -298,8 +298,8 @@ def run_analysis():
 
             # ---> HERE IS WHERE YOU CALL IT <---
             # Compute Chapter 5 specific metrics (Extraction Yield, R_ID, D_ID, U_cost, ETR)
-            ch5_metrics = compute_chapter5_metrics(summary_dict)
-            summary_dict.update(ch5_metrics)
+            metrics = compute_metrics(summary_dict)
+            summary_dict.update(metrics)
 
             per_browser_summaries[config] = summary_dict
 

@@ -83,66 +83,56 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
     """Launches native browser binaries with Playwright and forces Stealth."""
     print(f"\n[Orchestrator] Launching {browser_type} context (Hardened: {is_hardened})...")
     
-   # Standard Windows 10 Chrome User-Agent
+    # Standard Windows 10 Chrome User-Agent
     SPOOFED_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     run_profile_dir = tempfile.mkdtemp()
 
-     # --- BRAVE STRICT PROFILE HANDLING ---
+    # --- BRAVE STRICT PROFILE HANDLING ---
     if browser_type == "brave" and is_hardened:
-        # Dynamically find the project root (one folder above the 'scripts' directory)
         template_dir = os.path.join(PROJECT_ROOT, "brave_strict_profile")
         
         if os.path.exists(template_dir):
             print(f"    [+] Cloning Brave Strict Template to: {run_profile_dir}")
 
-            # --- FIX: IGNORE BROWSER LOCK FILES ---
-            # We ignore files that cause shutil to crash (locks, sockets, etc.)
             ignore_func = shutil.ignore_patterns(
                 'SingletonLock', 'SingletonSocket', 'SingletonCookie', 
-                'parent.lock', 'lock', '.parentlock', 'BrowserMetrics*', 'Crashpad'
+                'parent.lock', 'lock', '.parentlock', 'BrowserMetrics*', 'Crashpad', 'Cookies*', 
+                'Local Storage', 'IndexedDB', 'Session Storage', 'Sessions', 'Cache*'
             )
-            # We copy only the contents, so the browser starts with pre-set Shields
-            # dirs_exist_ok=True is used to copy into the already created tempdir
             shutil.copytree(template_dir, run_profile_dir, dirs_exist_ok=True, ignore=ignore_func)
 
+            # FIX: Properly indented inside the loop so ALL 3 files are removed
             for cert_file in ["cert9.db", "key4.db", "pkcs11.txt"]:
                 target = os.path.join(run_profile_dir, cert_file)
-            if os.path.exists(target):
-                os.remove(target)
+                if os.path.exists(target):
+                    os.remove(target)
         else:
             print(f"    [!] WARNING: Brave Template not found. Starting clean.")
-    # All other browsers use a disposable temp profile
+
     profile_dir = run_profile_dir
 
     # ==========================================================
     # CERTIFICATE INJECTION (cert9.db)
-    # Prevents the need for ignore_https_errors by natively trusting mitmproxy
     # ==========================================================
     cert_path = os.path.expanduser("~/.mitmproxy/mitmproxy-ca-cert.pem")
     if os.path.exists(cert_path):
         try:
-            # 1. Only initialize the database if it doesn't already exist.
-            # Running -N on an existing pre-warmed profile causes a password prompt hang.
             if not os.path.exists(os.path.join(profile_dir, "cert9.db")):
                 subprocess.check_call([
                     "certutil", "-d", f"sql:{profile_dir}", "-N", "--empty-password"
                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            # Create a temporary empty password file to auto-bypass any prompts
             empty_pwd = tempfile.NamedTemporaryFile(delete=False)
             empty_pwd.write(b"\n")
             empty_pwd.close()
             
-            # 2. Inject the mitmproxy certificate as a trusted CA
             subprocess.check_call([
                 "certutil", "-A", "-n", "mitmproxy", "-t", "TC,,", 
                 "-i", cert_path, "-d", f"sql:{profile_dir}", "-f", empty_pwd.name
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            # Cleanup the temp file
             os.unlink(empty_pwd.name)
-            
             print(f"    [+] Successfully injected mitmproxy cert into cert9.db")
         except FileNotFoundError:
             print("    [-] ERROR: 'certutil' not found! Run: sudo dnf install nss-tools")
@@ -164,11 +154,13 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
         binary_path= "/usr/lib/brave-browser/brave"
 
     # 2. Use the binary_path passed from entrypoint.sh if it exists
-        if binary_path and os.path.exists(binary_path):
-            print(f"    [+] Using provided binary path: {binary_path}")
-            launch_kwargs["executable_path"] = binary_path
-    
+    if binary_path and os.path.exists(binary_path):
+        print(f"    [+] Using binary path: {binary_path}")
+        launch_kwargs["executable_path"] = binary_path
 
+    # ==========================================================
+    # BROWSER SPECIFIC CONFIGURATIONS
+    # ==========================================================
     if browser_type in ["chrome", "brave"]:
         launch_kwargs.update({
             "ignore_https_errors": True,
@@ -181,38 +173,56 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
                 "--disable-search-engine-choice-screen",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--no-first-run",           # Skip welcome screens
-                "--no-welcome",             # Skip welcome screens
-                "--disable-features=BraveRewards,BraveNews", # Disable Brave extras
-                "--disable-brave-update",        # Stop Brave update checks
-                "--restore-last-session=false",  # Force clean start
-                  # --- NEW STABILITY FLAGS ---
-                "--password-store=basic",       # <--- Prevents Keyring crash
-                "--use-mock-keychain",          # <--- Prevents Keyring crash
-                "--disable-gpu",                # Prevents 3D acceleration crashes
-                "--no-zygote",                 # Disables the internal process manager
+                "--no-first-run",
+                "--no-welcome",
+                "--disable-features=BraveRewards,BraveNews",
+                "--disable-brave-update",
+                "--restore-last-session=false",
+                "--password-store=basic",
+                "--use-mock-keychain",
+                "--disable-gpu",
+                "--no-zygote",
             ]
         })
         context = p.chromium.launch_persistent_context(**launch_kwargs)
         
     elif browser_type == "firefox":
-        user_js_path = os.path.join(profile_dir, 'user.js')
-        with open(user_js_path, 'a') as f:
-            f.write('\nuser_pref("dom.webdriver.enabled", false);\n')
-            f.write('user_pref("useAutomationExtension", false);\n')
-            f.write('user_pref("media.eme.enabled", true);\n')
-            f.write('user_pref("browser.eme.ui.enabled", false);\n')
-            f.write('user_pref("media.gmp-widevinecdm.visible", true);\n')
-            f.write('user_pref("media.gmp-widevinecdm.enabled", true);\n')
+        # 1. Base preferences for all Firefox runs
+        ff_prefs = {
+            "dom.webdriver.enabled": False,
+            "useAutomationExtension": False,
+            "media.eme.enabled": True,
+            "browser.eme.ui.enabled": False,
+            "media.gmp-widevinecdm.visible": True,
+            "media.gmp-widevinecdm.enabled": True,
+        }
 
-            if is_hardened:
-                f.write('user_pref("privacy.resistFingerprinting", true);\n')
-                f.write('user_pref("privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts", true);\n')
-                f.write('user_pref("privacy.spoof_english", 2);\n') 
-                
+        # 2. Hardened Mode: RFP + ETP Strict + Total Cookie Protection
+        if is_hardened:
+            ff_prefs.update({
+                # --- Layer 1: ETP Strict (The "Shields") ---
+                "browser.contentblocking.category": "strict",
+                "privacy.trackingprotection.enabled": True,
+                "privacy.trackingprotection.socialtracking.enabled": True,
+                "privacy.trackingprotection.cryptomining.enabled": True,
+                "privacy.trackingprotection.fingerprinting.enabled": True,
+
+                # --- Layer 2: Total Cookie Protection & State Partitioning ---
+                "network.cookie.cookieBehavior": 5,          # Partition cross-site cookies (dFPI)
+                "privacy.partition.network_state": True,    # Partition cache, connections, HSTS
+                "privacy.query_stripping.enabled": True,     # Strip tracking query params (UIDs)
+
+                # --- Layer 3: Resist Fingerprinting (Tor Uplift) ---
+                "privacy.resistFingerprinting": True,
+                "privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts": True,
+                "privacy.spoof_english": 2,
+            })
+
+        # Pass natively through Playwright rather than user.js
+        launch_kwargs["firefox_user_prefs"] = ff_prefs
         launch_kwargs.update({"ignore_default_args": ["--enable-automation"]})
         context = p.firefox.launch_persistent_context(**launch_kwargs)
-    
+
     elif browser_type == "webkit":
         launch_kwargs.update({
             "ignore_https_errors": True,
@@ -221,16 +231,16 @@ def create_browser_context(p, browser_type, binary_path, is_hardened, proxy_port
         })
         context = p.webkit.launch_persistent_context(**launch_kwargs)
     else:
-        raise ValueError("Invalid browser type")
+        raise ValueError(f"Invalid browser type: {browser_type}")
 
-    # Inject Stealth JS into all pages to prevent Automation Bias (Section 3.3.3)
-    stealth_path = os.path.join(PROJECT_ROOT, "scripts", "stealth.js")
-    try:
-        with open(stealth_path, "r") as f:
-            stealth_js = f.read()
-            context.add_init_script(stealth_js)
-    except FileNotFoundError:
-        print(f"[Warning] {stealth_path} not found. Bypassing JS stealth injection.")
+    # Only inject Chrome stealth mocks into Chromium-based browsers (Chrome & Brave)
+    if browser_type in ["chrome", "brave"]:
+        stealth_path = os.path.join(PROJECT_ROOT, "scripts", "stealth.js")
+        try:
+            with open(stealth_path, "r") as f:
+                context.add_init_script(f.read())
+        except FileNotFoundError:
+            print(f"[Warning] {stealth_path} not found. Bypassing JS stealth injection.")
 
     return context
 
