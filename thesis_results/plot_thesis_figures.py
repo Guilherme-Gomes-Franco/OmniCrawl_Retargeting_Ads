@@ -155,9 +155,9 @@ ax.plot([u_cost[2], u_cost[4]], [high_res[2], high_res[4]],
         color="purple", linestyle="--", linewidth=1.8, label="Pareto Frontier", zorder=3)
 
 # Two-line labels with padding so nothing gets clipped
-ax.set_xlabel("Site Breakage Index ($U_{cost}$) — Lower is Better\n(0.0 = Baseline Compatibility)", 
+ax.set_xlabel("Site Breakage Index ($U_{cost}$)", 
               labelpad=10)
-ax.set_ylabel("High Tracking Resistance Auctions (%)\n[Higher is Better]", 
+ax.set_ylabel("High Tracking Resistance Auctions (%)", 
               labelpad=12)
 
 ax.set_title("Empirical Pareto Frontier (Privacy vs. Compatibility)", pad=14)
@@ -179,13 +179,11 @@ print("  [+] Saved Figure 3 (Pareto Frontier)")
 fig, ax = plt.subplots(figsize=(7.2, 4.2))
 bars = ax.bar(x, r_id, width=0.48, color="#4863A0", edgecolor="black", linewidth=0.8)
 
-ax.axhline(50, color="gray", linestyle=":", linewidth=1.0, alpha=0.7, label="Coin-flip Baseline (50%)")
 ax.set_ylabel("Re-Identification Rate ($R_{ID}$) (%)")
 ax.set_title("Advertiser Persona Persistence Rate Across Identity Break", pad=12)
 ax.set_xticks(x)
 ax.set_xticklabels(labels)
 ax.set_ylim(0, 80)
-ax.legend(loc="lower right", frameon=True, framealpha=0.95)
 
 for bar in bars:
     h = bar.get_height()
